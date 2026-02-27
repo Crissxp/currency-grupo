@@ -68,6 +68,16 @@ export default function HomePage() {
     }
   }, []);
 
+  // cada cierto intervalo revisa si hay cambios en la hoja
+  useEffect(() => {
+    // primera carga inmediata
+    loadFromSheet();
+    const id = setInterval(() => {
+      loadFromSheet();
+    }, 30_000); // 30 segundos
+    return () => clearInterval(id);
+  }, []);
+
   // Guardar en localStorage cada vez que cambian los withdrawals
   useEffect(() => {
     localStorage.setItem('currency-grupo-data', JSON.stringify({
@@ -87,6 +97,7 @@ export default function HomePage() {
         body: JSON.stringify({
           action: 'sync',
           withdrawals,
+          oroBanco,
         }),
       });
 
@@ -103,6 +114,34 @@ export default function HomePage() {
       alert('❌ No se pudo conectar al servidor');
     } finally {
       setSincronizando(false);
+    }
+  };
+
+  // Cargar los withdrawals desde Google Sheets
+  const loadFromSheet = async () => {
+    try {
+      const res = await fetch('/api/load');
+      const json = await res.json();
+      if (json.success) {
+        if (json.oroBanco) {
+          // sincronizamos el estado del banco con lo remoto
+          setOroBanco((prev) => ({ ...prev, ...json.oroBanco }));
+        }
+        // convertir a Withdrawal si es necesario
+        const sheetData: Withdrawal[] = (json.data || []).map((r: any) => ({
+          id: r.fecha + r.nombre,
+          playerId: PLAYERS.find((p) => p.nombre === r.nombre)?.id as PlayerId,
+          nombre: r.nombre,
+          oro: r.oro,
+          tasa: r.tasa || tasaOroUsd,
+          usd: r.usd,
+          fecha: r.fecha,
+          estado: r.estado || 'pendiente',
+        }));
+        setWithdrawals(sheetData);
+      }
+    } catch (e) {
+      console.error('load from sheet failed', e);
     }
   };
 

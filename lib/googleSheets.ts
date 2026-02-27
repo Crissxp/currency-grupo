@@ -73,10 +73,10 @@ export async function clearSheet() {
   const spreadsheetId = process.env.NEXT_PUBLIC_GOOGLE_SHEET_ID;
   const sheetName = await getFirstSheetName(spreadsheetId!);
 
-  // "A2:F" alone causes a parsing error; specify a sufficiently large end row.
+  // Clear a wide area including the first row; we'll rewrite header/bank ourselves
   await sheets.spreadsheets.values.clear({
     spreadsheetId,
-    range: `${sheetName}!A2:F1000`,
+    range: `${sheetName}!A1:F1000`,
   });
 }
 
@@ -85,9 +85,10 @@ export async function getAllWithdrawals() {
   const spreadsheetId = process.env.NEXT_PUBLIC_GOOGLE_SHEET_ID;
   const sheetName = await getFirstSheetName(spreadsheetId!);
 
+  // grab the entire data area so we can interpret the bank row if present
   const result = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: `${sheetName}!A2:F`,
+    range: `${sheetName}!A1:F1000`,
   });
 
   return result.data.values || [];
