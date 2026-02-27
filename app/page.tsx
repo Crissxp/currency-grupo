@@ -335,6 +335,23 @@ export default function HomePage() {
                 >
                   {sincronizando ? '⏳ Sincronizando...' : '☁️ Sincronizar'}
                 </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      const res = await fetch('/api/load');
+                      const json = await res.json();
+                      console.log('remote rows', json);
+                      alert('Datos remotos en consola');
+                    } catch (e) {
+                      console.error(e);
+                      alert('Error cargando datos remotos');
+                    }
+                  }}
+                  className="btn-sync"
+                  style={{ marginLeft: '8px' }}
+                >
+                  📝 Ver remotos
+                </button>
                 {ultimaSincronizacion && (
                   <p className="caption" style={{ marginTop: '8px', fontSize: '11px', color: '#9ca3af' }}>
                     Última: {ultimaSincronizacion}
