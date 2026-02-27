@@ -88,7 +88,11 @@ export default function HomePage() {
   }, [withdrawals, oroBanco, tasaOroUsd]);
 
   // Sincronizar con Google Sheets
-  const sincronizarConSheet = async () => {
+  const sincronizarConSheet = async (
+    currentWithdrawals: Withdrawal[] = withdrawals,
+    currentBank: Record<PlayerId, number> = oroBanco,
+    showAlert = true
+  ) => {
     setSincronizando(true);
     try {
       const response = await fetch('/api/sync', {
@@ -96,8 +100,8 @@ export default function HomePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'sync',
-          withdrawals,
-          oroBanco,
+          withdrawals: currentWithdrawals,
+          oroBanco: currentBank,
         }),
       });
 
@@ -105,13 +109,13 @@ export default function HomePage() {
         const ahora = new Date().toLocaleString('es-MX');
         setUltimaSincronizacion(ahora);
         localStorage.setItem('currency-grupo-ultima-sync', ahora);
-        alert('✅ Datos sincronizados con Google Sheets');
+        if (showAlert) alert('✅ Datos sincronizados con Google Sheets');
       } else {
-        alert('❌ Error al sincronizar');
+        if (showAlert) alert('❌ Error al sincronizar');
       }
     } catch (error) {
       console.error('Error sincronizando:', error);
-      alert('❌ No se pudo conectar al servidor');
+      if (showAlert) alert('❌ No se pudo conectar al servidor');
     } finally {
       setSincronizando(false);
     }
@@ -140,7 +144,12 @@ export default function HomePage() {
             fecha: r.fecha,
             estado: r.estado || 'pendiente',
           }));
-        setWithdrawals(sheetData);
+        // solo actualizamos si hay diferencias reales para no borrar cambios
+        setWithdrawals((prev) => {
+          const prevStr = JSON.stringify(prev);
+          const newStr = JSON.stringify(sheetData);
+          return prevStr === newStr ? prev : sheetData;
+        });
       }
     } catch (e) {
       console.error('load from sheet failed', e);
@@ -200,10 +209,9 @@ export default function HomePage() {
 
   const cambiarOroManual = (playerId: PlayerId, valor: number) => {
     const limpio = isNaN(valor) ? 0 : Math.max(0, Math.floor(valor));
-    setOroBanco((prev) => ({
-      ...prev,
-      [playerId]: limpio,
-    }));
+    const nuevoBanco = { ...oroBanco, [playerId]: limpio };
+    setOroBanco(nuevoBanco);
+    sincronizarConSheet(undefined, nuevoBanco, false);
   };
 
   const abrirModalRetiro = () => {
@@ -272,10 +280,15 @@ export default function HomePage() {
       });
     }
 
+    // aplicar cambios locales
     setOroBanco(nuevoOroBanco);
     setTasaOroUsd(tasaAplicada);
-    setWithdrawals((prev) => [...nuevos, ...prev]);
+    const nuevosState = [...nuevos, ...withdrawals];
+    setWithdrawals(nuevosState);
     cerrarModalRetiro();
+
+    // sincronizar inmediatamente con el nuevo estado
+    sincronizarConSheet(nuevosState, nuevoOroBanco);
   };
 
   const cambiarEstadoBalance = (
@@ -285,17 +298,17 @@ export default function HomePage() {
     const estadoInterno: WithdrawalStatus =
       nuevoEstado === 'Pagado' ? 'pagado' : 'pendiente';
 
-    setWithdrawals((prev) =>
-      prev.map((w) =>
-        w.playerId === playerId ? { ...w, estado: estadoInterno } : w
-      )
+    const nuevos = withdrawals.map((w) =>
+      w.playerId === playerId ? { ...w, estado: estadoInterno } : w
     );
+    setWithdrawals(nuevos);
+    sincronizarConSheet(nuevos, undefined, false);
   };
 
   const cambiarEstadoHistorial = (id: string, estado: WithdrawalStatus) => {
-    setWithdrawals((prev) =>
-      prev.map((w) => (w.id === id ? { ...w, estado } : w))
-    );
+    const nuevos = withdrawals.map((w) => (w.id === id ? { ...w, estado } : w));
+    setWithdrawals(nuevos);
+    sincronizarConSheet(nuevos, undefined, false);
   };
 
   const limpiarHistorial = () => {
@@ -323,7 +336,7 @@ export default function HomePage() {
   useEffect(() => {
     const intervalo = setInterval(() => {
       if (withdrawals.length > 0) {
-        sincronizarConSheet();
+        sincronizarConSheet(undefined, undefined, false);
       }
     }, 5 * 60 * 1000); // 5 minutos
 
@@ -373,7 +386,7 @@ export default function HomePage() {
               </div>
               <div style={{ textAlign: 'right', minWidth: '140px' }}>
                 <button
-                  onClick={sincronizarConSheet}
+                  onClick={() => sincronizarConSheet()}
                   disabled={sincronizando}
                   className="btn-sync"
                   title="Sincronizar datos con Google Sheets"
