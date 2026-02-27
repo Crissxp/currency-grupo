@@ -128,16 +128,18 @@ export default function HomePage() {
           setOroBanco((prev) => ({ ...prev, ...json.oroBanco }));
         }
         // convertir a Withdrawal si es necesario
-        const sheetData: Withdrawal[] = (json.data || []).map((r: any) => ({
-          id: r.fecha + r.nombre,
-          playerId: PLAYERS.find((p) => p.nombre === r.nombre)?.id as PlayerId,
-          nombre: r.nombre,
-          oro: r.oro,
-          tasa: r.tasa || tasaOroUsd,
-          usd: r.usd,
-          fecha: r.fecha,
-          estado: r.estado || 'pendiente',
-        }));
+        const sheetData: Withdrawal[] = (json.data || [])
+          .filter((r: any) => r && r.fecha && r.nombre) // descartar filas incompletas
+          .map((r: any) => ({
+            id: r.fecha + r.nombre,
+            playerId: PLAYERS.find((p) => p.nombre === r.nombre)?.id as PlayerId,
+            nombre: r.nombre,
+            oro: r.oro,
+            tasa: r.tasa || tasaOroUsd,
+            usd: r.usd,
+            fecha: r.fecha,
+            estado: r.estado || 'pendiente',
+          }));
         setWithdrawals(sheetData);
       }
     } catch (e) {
@@ -302,16 +304,20 @@ export default function HomePage() {
     }
   };
 
-  const formatearFecha = (iso: string) => {
+  const formatearFecha = (iso?: string | null) => {
+    if (!iso) return '';
     const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
     return d.toLocaleString();
   };
 
-  const formatearNumero = (n: number, decimales = 2) =>
-    n.toLocaleString('es-MX', {
+  const formatearNumero = (n: number | null | undefined, decimales = 2) => {
+    if (n == null || isNaN(n)) return '';
+    return n.toLocaleString('es-MX', {
       minimumFractionDigits: decimales,
       maximumFractionDigits: decimales,
     });
+  };
 
   // Sincronizar automáticamente cada 5 minutos
   useEffect(() => {
