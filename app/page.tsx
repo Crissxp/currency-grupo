@@ -74,7 +74,7 @@ export default function HomePage() {
     loadFromSheet();
     const id = setInterval(() => {
       loadFromSheet();
-    }, 30_000); // 30 segundos
+    }, 5 * 60 * 1000); // 5 minutos
     return () => clearInterval(id);
   }, []);
 
