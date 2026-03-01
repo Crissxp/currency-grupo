@@ -210,7 +210,6 @@ export default function HomePage() {
     const limpio = isNaN(valor) ? 0 : Math.max(0, Math.floor(valor));
     const nuevoBanco = { ...oroBanco, [playerId]: limpio };
     setOroBanco(nuevoBanco);
-    sincronizarConSheet(undefined, nuevoBanco, false);
   };
 
   const abrirModalRetiro = () => {
@@ -285,9 +284,6 @@ export default function HomePage() {
     const nuevosState = [...nuevos, ...withdrawals];
     setWithdrawals(nuevosState);
     cerrarModalRetiro();
-
-    // sincronizar inmediatamente con el nuevo estado
-    sincronizarConSheet(nuevosState, nuevoOroBanco);
   };
 
   const cambiarEstadoBalance = (
@@ -301,13 +297,11 @@ export default function HomePage() {
       w.playerId === playerId ? { ...w, estado: estadoInterno } : w
     );
     setWithdrawals(nuevos);
-    sincronizarConSheet(nuevos, undefined, false);
   };
 
   const cambiarEstadoHistorial = (id: string, estado: WithdrawalStatus) => {
     const nuevos = withdrawals.map((w) => (w.id === id ? { ...w, estado } : w));
     setWithdrawals(nuevos);
-    sincronizarConSheet(nuevos, undefined, false);
   };
 
   const limpiarHistorial = () => {
@@ -372,7 +366,15 @@ export default function HomePage() {
                   </strong>
                 </p>
               </div>
-              <div style={{ textAlign: 'right', minWidth: '140px' }}>
+              <div style={{ textAlign: 'right', minWidth: '200px' }}>
+                <button
+                  onClick={() => sincronizarConSheet(withdrawals, oroBanco, true)}
+                  disabled={sincronizando}
+                  className="btn-primary"
+                  style={{ marginBottom: '8px' }}
+                >
+                  {sincronizando ? '⏳ Guardando...' : '💾 Guardar cambios'}
+                </button>
                 {ultimaSincronizacion && (
                   <p className="caption" style={{ marginTop: '8px', fontSize: '11px', color: '#9ca3af' }}>
                     Última: {ultimaSincronizacion}
