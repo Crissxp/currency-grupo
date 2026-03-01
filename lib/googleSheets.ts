@@ -61,7 +61,8 @@ export async function appendToSheet(values: any[][]) {
   await sheets.spreadsheets.values.append({
     spreadsheetId,
     range: `${sheetName}!A:F`,
-    valueInputOption: 'USER_ENTERED',
+    // Use RAW so Google Sheets doesn't reformat numeric precision
+    valueInputOption: 'RAW',
     requestBody: {
       values,
     },

@@ -138,7 +138,10 @@ export default function HomePage() {
             playerId: PLAYERS.find((p) => p.nombre === r.nombre)?.id as PlayerId,
             nombre: r.nombre,
             oro: r.oro,
-            tasa: r.tasa !== undefined && r.tasa !== null ? r.tasa : tasaOroUsd,
+            tasa:
+              r.tasa !== undefined && r.tasa !== null
+                ? (typeof r.tasa === 'number' ? r.tasa : parseFloat(r.tasa))
+                : tasaOroUsd,
             usd: r.usd,
             fecha: r.fecha,
             estado: r.estado || 'pendiente',
