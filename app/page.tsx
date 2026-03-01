@@ -44,6 +44,7 @@ export default function HomePage() {
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [sincronizando, setSincronizando] = useState(false);
   const [ultimaSincronizacion, setUltimaSincronizacion] = useState<string | null>(null);
+  const [yaCargoDelSheet, setYaCargoDelSheet] = useState(false);
 
   // Cargar desde localStorage al montar
   useEffect(() => {
@@ -68,15 +69,13 @@ export default function HomePage() {
     }
   }, []);
 
-  // cada cierto intervalo revisa si hay cambios en la hoja
+  // cargar datos una sola vez al montar el componente
   useEffect(() => {
-    // primera carga inmediata
-    loadFromSheet();
-    const id = setInterval(() => {
+    if (!yaCargoDelSheet) {
       loadFromSheet();
-    }, 3 * 1000); // 3 segundos para actualización en tiempo real
-    return () => clearInterval(id);
-  }, []);
+      setYaCargoDelSheet(true);
+    }
+  }, [yaCargoDelSheet]);
 
   // Guardar en localStorage cada vez que cambian los withdrawals
   useEffect(() => {
@@ -331,17 +330,6 @@ export default function HomePage() {
       maximumFractionDigits: decimales,
     });
   };
-
-  // Sincronizar automáticamente en tiempo real
-  useEffect(() => {
-    const intervalo = setInterval(() => {
-      if (withdrawals.length > 0) {
-        sincronizarConSheet(undefined, undefined, false);
-      }
-    }, 5 * 1000); // 5 segundos
-
-    return () => clearInterval(intervalo);
-  }, [withdrawals]);
 
   return (
     <main className="page">
