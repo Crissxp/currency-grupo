@@ -74,7 +74,7 @@ export default function HomePage() {
     loadFromSheet();
     const id = setInterval(() => {
       loadFromSheet();
-    }, 5 * 60 * 1000); // 5 minutos
+    }, 3 * 1000); // 3 segundos para actualización en tiempo real
     return () => clearInterval(id);
   }, []);
 
@@ -139,7 +139,7 @@ export default function HomePage() {
             playerId: PLAYERS.find((p) => p.nombre === r.nombre)?.id as PlayerId,
             nombre: r.nombre,
             oro: r.oro,
-            tasa: r.tasa || tasaOroUsd,
+            tasa: r.tasa !== undefined && r.tasa !== null ? r.tasa : tasaOroUsd,
             usd: r.usd,
             fecha: r.fecha,
             estado: r.estado || 'pendiente',
@@ -239,7 +239,7 @@ export default function HomePage() {
   };
 
   const confirmarRetiro = () => {
-    const tasaAplicada = modalTasa ?? tasaOroUsd;
+    const tasaAplicada = modalTasa !== null && modalTasa !== undefined ? modalTasa : tasaOroUsd;
 
     const hayAlgo = PLAYERS.some((p) => retirosDraft[p.id] > 0);
     if (!hayAlgo) {
@@ -332,13 +332,13 @@ export default function HomePage() {
     });
   };
 
-  // Sincronizar automáticamente cada 5 minutos
+  // Sincronizar automáticamente en tiempo real
   useEffect(() => {
     const intervalo = setInterval(() => {
       if (withdrawals.length > 0) {
         sincronizarConSheet(undefined, undefined, false);
       }
-    }, 5 * 60 * 1000); // 5 minutos
+    }, 5 * 1000); // 5 segundos
 
     return () => clearInterval(intervalo);
   }, [withdrawals]);
@@ -385,31 +385,6 @@ export default function HomePage() {
                 </p>
               </div>
               <div style={{ textAlign: 'right', minWidth: '140px' }}>
-                <button
-                  onClick={() => sincronizarConSheet()}
-                  disabled={sincronizando}
-                  className="btn-sync"
-                  title="Sincronizar datos con Google Sheets"
-                >
-                  {sincronizando ? '⏳ Sincronizando...' : '☁️ Sincronizar'}
-                </button>
-                <button
-                  onClick={async () => {
-                    try {
-                      const res = await fetch('/api/load');
-                      const json = await res.json();
-                      console.log('remote rows', json);
-                      alert('Datos remotos en consola');
-                    } catch (e) {
-                      console.error(e);
-                      alert('Error cargando datos remotos');
-                    }
-                  }}
-                  className="btn-sync"
-                  style={{ marginLeft: '8px' }}
-                >
-                  📝 Ver remotos
-                </button>
                 {ultimaSincronizacion && (
                   <p className="caption" style={{ marginTop: '8px', fontSize: '11px', color: '#9ca3af' }}>
                     Última: {ultimaSincronizacion}
