@@ -190,7 +190,7 @@ export default function HomePage() {
     };
 
     withdrawals.forEach((w) => {
-      if (w.estado === 'pendiente') {
+      if (w.estado === 'pendiente' && w.playerId && base[w.playerId]) {
         base[w.playerId].usdPendiente += w.usd;
         base[w.playerId].tienePendiente = true;
       }
