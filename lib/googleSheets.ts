@@ -90,6 +90,8 @@ export async function getAllWithdrawals() {
   const result = await sheets.spreadsheets.values.get({
     spreadsheetId,
     range: `${sheetName}!A1:F1000`,
+    // request unformatted values so we get raw numeric precision (avoid formatted display rounding)
+    valueRenderOption: 'UNFORMATTED_VALUE',
   });
 
   return result.data.values || [];
