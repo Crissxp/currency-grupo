@@ -596,7 +596,7 @@ export default function HomePage() {
                 Ratio (1 {unidadLabel} = ? {simboloUsd})
                 <input
                   type="number"
-                  step={0.01}
+                  step="any"  {/* allow arbitrary precision, no rounding by step */}
                   value={modalTasa ?? tasaOroUsd}
                   onChange={(e) =>
                     setModalTasa(parseFloat(e.target.value || '0'))

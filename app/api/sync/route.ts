@@ -22,7 +22,8 @@ export async function POST(request: NextRequest) {
           w.fecha,
           w.nombre,
           w.oro,
-          w.tasa,
+          // store tasa as string to prevent Sheets from auto-rounding
+          String(w.tasa),
           w.usd,
           w.estado,
         ]);
