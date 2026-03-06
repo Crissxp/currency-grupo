@@ -153,7 +153,30 @@ export default function HomePage() {
       if (json.success) {
         if (json.oroBanco) {
           // sincronizamos el estado del banco con lo remoto
-          setOroBanco((prev) => ({ ...prev, ...json.oroBanco }));
+          const bank = json.oroBanco as Record<string, number>;
+
+          setOroBanco((prev) => ({ ...prev, ...bank }));
+
+          // Añadir miembros ausentes basados en las claves de oroBanco (ej: 'panchito')
+          setMembers((prevMembers) => {
+            const missing = Object.keys(bank).filter((id) => !prevMembers.some((m) => m.id === id));
+            if (missing.length === 0) return prevMembers;
+            const newPlayers: Player[] = missing.map((id) => ({
+              id,
+              nombre: id.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+            }));
+
+            // aseguramos retirosDraft para los nuevos jugadores
+            setRetirosDraft((prevDraft) => {
+              const next = { ...prevDraft } as Record<PlayerId, number>;
+              newPlayers.forEach((p) => {
+                if (!(p.id in next)) next[p.id] = 0;
+              });
+              return next;
+            });
+
+            return [...prevMembers, ...newPlayers];
+          });
         }
 
         // detectar nombres que vienen en la hoja y que no están en `members`
