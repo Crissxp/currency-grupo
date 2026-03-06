@@ -162,6 +162,7 @@ export default function HomePage() {
         const missingNames = namesInSheet.filter((n: string) => !members.some((m) => m.nombre === n));
 
         // crear jugadores faltantes y actualizar estados locales para incluirlos
+        let membersForLookup: Player[] = members;
         if (missingNames.length > 0) {
           const newPlayers: Player[] = missingNames.map((name) => {
             const id = name.toLowerCase().replace(/\s+/g, '_');
@@ -169,6 +170,7 @@ export default function HomePage() {
           });
           const updatedMembers = [...members, ...newPlayers];
           setMembers(updatedMembers);
+          membersForLookup = updatedMembers;
 
           setOroBanco((prev) => {
             const next = { ...prev } as Record<PlayerId, number>;
@@ -190,13 +192,12 @@ export default function HomePage() {
         // convertir a Withdrawal usando la lista actualizada de miembros (si hubo nuevos, los añadimos arriba)
         const sheetData: Withdrawal[] = rawRows.map((r: any) => {
           const nombre: string = r.nombre;
-          const id = (members.find((p) => p.nombre === nombre) ||
-            // si setMembers se ejecutó antes, use también el id generado anteriormente
-            { id: nombre.toLowerCase().replace(/\s+/g, '_') }).id as PlayerId;
+          const found = membersForLookup.find((p) => p.nombre === nombre);
+          const id = (found && found.id) || nombre.toLowerCase().replace(/\s+/g, '_');
 
           return {
             id: r.fecha + nombre,
-            playerId: id,
+            playerId: id as PlayerId,
             nombre,
             oro: r.oro,
             tasa:
