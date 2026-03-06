@@ -263,6 +263,43 @@ export default function HomePage() {
           const newStr = JSON.stringify(sheetData);
           return prevStr === newStr ? prev : sheetData;
         });
+        // actualizar localStorage inmediatamente con los datos cargados del sheet
+        try {
+          const bankObj = (json.oroBanco && typeof json.oroBanco === 'object') ? json.oroBanco as Record<string, number> : {};
+          const membersFromRow = Array.isArray(json.members) ? (json.members as Player[]) : null;
+          // construir lista final de members para almacenar localmente
+          const mergedMembers: Player[] = [];
+
+          // empezar con membersFromRow si existe, sino con los miembros actuales
+          if (membersFromRow) {
+            membersFromRow.forEach((m) => mergedMembers.push(m));
+          } else {
+            members.forEach((m) => mergedMembers.push(m));
+          }
+
+          // añadir claves del bank si faltan
+          Object.keys(bankObj).forEach((id) => {
+            if (!mergedMembers.some((mm) => mm.id === id)) {
+              mergedMembers.push({ id, nombre: id.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) });
+            }
+          });
+
+          // añadir nombres detectados en filas si faltan
+          namesInSheet.forEach((name) => {
+            if (!mergedMembers.some((mm) => mm.nombre === name)) {
+              mergedMembers.push({ id: name.toLowerCase().replace(/\s+/g, '_'), nombre: name });
+            }
+          });
+
+          localStorage.setItem('currency-grupo-data', JSON.stringify({
+            withdrawals: sheetData,
+            oroBanco: bankObj,
+            tasaOroUsd,
+            members: mergedMembers,
+          }));
+        } catch (e) {
+          console.error('Error writing sheet data to localStorage', e);
+        }
       }
     } catch (e) {
       console.error('load from sheet failed', e);
