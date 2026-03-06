@@ -548,12 +548,12 @@ export default function HomePage() {
   return (
     <main className="page">
       <div className="layout">
-        <header className="hero">
+        <header className="hero" style={{ textAlign: 'center', padding: '40px 20px' }}>
           <h1>El Gordo supplier</h1>
           <p>Control de {unidadLabel}, retiros y balance del grupo.</p>
         </header>
 
-        <section className="top-controls">
+        <section className="top-controls" style={{ display: 'none' }}>
           <div className="control-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '20px' }}>
               <div>
@@ -739,9 +739,13 @@ export default function HomePage() {
                     </tr>
                   ))}
                   <tr className="fila-total">
-                    <td>Total {unidadLabel} en banco</td>
-                    <td style={{ width: '100%' }}></td>
-                    <td colSpan={2} style={{ fontSize: '18px', fontWeight: '700', textAlign: 'center' }}>{totalOroBanco}</td>
+                    <td colSpan={2}>Total {unidadLabel} en banco</td>
+                    <td style={{ fontSize: '18px', fontWeight: '700', textAlign: 'center' }}>
+                      <span>{totalOroBanco}</span>
+                    </td>
+                    <td style={{ fontSize: '16px', fontWeight: '600', textAlign: 'center' }}>
+                      <span className="badge">{unidadLabel}</span>
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -793,16 +797,50 @@ export default function HomePage() {
                     );
                   })}
                   <tr className="fila-total">
-                    <td>Total</td>
-                    <td>{formatearNumero(totalUsdPendiente)}</td>
-                    <td>{simboloUsd}</td>
-                    <td></td>
+                    <td colSpan={2}>Total</td>
+                    <td style={{ fontSize: '18px', fontWeight: '700', textAlign: 'center' }}>
+                      <span>{formatearNumero(totalUsdPendiente)}</span>
+                    </td>
+                    <td style={{ fontSize: '16px', fontWeight: '600', textAlign: 'center' }}>
+                      <span className="badge">{simboloUsd}</span>
+                    </td>
                   </tr>
                 </tbody>
               </table>
             </div>
           </section>
         </section>
+
+        {/* Botón Guardar Cambios */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 0', gap: '12px' }}>
+          {ultimaSincronizacion && (
+            <div style={{ display: 'flex', alignItems: 'center', fontSize: '12px', color: '#9ca3af' }}>
+              Última: {ultimaSincronizacion}
+            </div>
+          )}
+          <button
+            onClick={handleGuardar}
+            disabled={sincronizando}
+            className="btn-primary"
+            style={{
+              padding: '10px 20px',
+              fontSize: '14px',
+              fontWeight: '600',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+              transition: 'all 0.2s ease',
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.4)';
+              e.currentTarget.style.transform = 'translateY(-2px)';
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+              e.currentTarget.style.transform = 'translateY(0)';
+            }}
+          >
+            {sincronizando ? '⏳ Guardando...' : '💾 Guardar cambios'}
+          </button>
+        </div>
 
         {/* Historial */}
         <section className="panel panel-history">
