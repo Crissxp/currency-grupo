@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useRef } from 'react';
 
-type PlayerId = 'alan' | 'carlitos' | 'criss' | 'foquita' | 'tommy';
+type PlayerId = string;
 
 type Player = {
   id: PlayerId;
@@ -22,7 +22,7 @@ type Withdrawal = {
   estado: WithdrawalStatus;
 };
 
-const PLAYERS: Player[] = [
+const DEFAULT_PLAYERS: Player[] = [
   { id: 'alan', nombre: 'Alan' },
   { id: 'carlitos', nombre: 'Carlitos' },
   { id: 'criss', nombre: 'Criss' },
@@ -31,6 +31,7 @@ const PLAYERS: Player[] = [
 ];
 
 export default function HomePage() {
+  const [members, setMembers] = useState<Player[]>(DEFAULT_PLAYERS);
   const [oroBanco, setOroBanco] = useState<Record<PlayerId, number>>({
     alan: 0,
     carlitos: 0,
@@ -50,12 +51,31 @@ export default function HomePage() {
     oroBanco: Record<PlayerId, number>;
   } | null>(null);
 
+  // Modal de miembros
+  const [modalMiembrosAbierto, setModalMiembrosAbierto] = useState(false);
+  const [miembroEnEdicion, setMiembroEnEdicion] = useState<Player | null>(null);
+  const [nuevoMiembroNombre, setNuevoMiembroNombre] = useState('');
+
+  // Modal para modificar oro
+  const [modalModificarOroAbierto, setModalModificarOroAbierto] = useState(false);
+  const [jugadorEnModificacion, setJugadorEnModificacion] = useState<Player | null>(null);
+  const [cantidadTemporal, setCantidadTemporal] = useState<number>(0);
+
+  // Modal para sumar/restar oro
+  const [modalSumaRestaAbierto, setModalSumaRestaAbierto] = useState(false);
+  const [jugadorSumaResta, setJugadorSumaResta] = useState<Player | null>(null);
+  const [tipoOperacion, setTipoOperacion] = useState<'suma' | 'resta'>('suma');
+  const [cantidadSumaResta, setCantidadSumaResta] = useState<number>(0);
+
   // Cargar desde localStorage al montar
   useEffect(() => {
     const guardado = localStorage.getItem('currency-grupo-data');
     if (guardado) {
       try {
         const datos = JSON.parse(guardado);
+        if (datos.members) {
+          setMembers(datos.members);
+        }
         setWithdrawals(datos.withdrawals || []);
         setOroBanco(datos.oroBanco || {
           alan: 0,
@@ -81,14 +101,15 @@ export default function HomePage() {
     }
   }, [yaCargoDelSheet]);
 
-  // Guardar en localStorage cada vez que cambian los withdrawals
+  // Guardar en localStorage cada vez que cambian los datos principales
   useEffect(() => {
     localStorage.setItem('currency-grupo-data', JSON.stringify({
       withdrawals,
       oroBanco,
       tasaOroUsd,
+      members,
     }));
-  }, [withdrawals, oroBanco, tasaOroUsd]);
+  }, [withdrawals, oroBanco, tasaOroUsd, members]);
 
   // Sincronizar con Google Sheets
   const sincronizarConSheet = async (
@@ -139,7 +160,7 @@ export default function HomePage() {
           .filter((r: any) => r && r.fecha && r.nombre) // descartar filas incompletas
           .map((r: any) => ({
             id: r.fecha + r.nombre,
-            playerId: PLAYERS.find((p) => p.nombre === r.nombre)?.id as PlayerId,
+            playerId: members.find((p) => p.nombre === r.nombre)?.id as PlayerId,
             nombre: r.nombre,
             oro: r.oro,
             tasa:
@@ -187,13 +208,12 @@ export default function HomePage() {
     const base: Record<
       PlayerId,
       { usdPendiente: number; tienePendiente: boolean }
-    > = {
-      alan: { usdPendiente: 0, tienePendiente: false },
-      carlitos: { usdPendiente: 0, tienePendiente: false },
-      criss: { usdPendiente: 0, tienePendiente: false },
-      foquita: { usdPendiente: 0, tienePendiente: false },
-      tommy: { usdPendiente: 0, tienePendiente: false },
-    };
+    > = {};
+
+    // Inicializar con todos los miembros
+    members.forEach((member) => {
+      base[member.id] = { usdPendiente: 0, tienePendiente: false };
+    });
 
     withdrawals.forEach((w) => {
       if (w.estado === 'pendiente' && w.playerId && base[w.playerId]) {
@@ -203,7 +223,7 @@ export default function HomePage() {
     });
 
     return base;
-  }, [withdrawals]);
+  }, [withdrawals, members]);
 
   const totalUsdPendiente = useMemo(
     () =>
@@ -221,15 +241,92 @@ export default function HomePage() {
     pendingSyncRef.current = { withdrawals, oroBanco: nuevoBanco };
   };
 
+  const abrirModalModificarOro = (player: Player) => {
+    setJugadorEnModificacion(player);
+    setCantidadTemporal(oroBanco[player.id] || 0);
+    setModalModificarOroAbierto(true);
+  };
+
+  const cerrarModalModificarOro = () => {
+    setModalModificarOroAbierto(false);
+    setJugadorEnModificacion(null);
+    setCantidadTemporal(0);
+  };
+
+  const agregarOro = () => {
+    if (jugadorEnModificacion) {
+      const nuevaCantidad = cantidadTemporal + 1;
+      cambiarOroManual(jugadorEnModificacion.id, nuevaCantidad);
+      setCantidadTemporal(nuevaCantidad);
+    }
+  };
+
+  const quitarOro = () => {
+    if (jugadorEnModificacion) {
+      const nuevaCantidad = Math.max(0, cantidadTemporal - 1);
+      cambiarOroManual(jugadorEnModificacion.id, nuevaCantidad);
+      setCantidadTemporal(nuevaCantidad);
+    }
+  };
+
+  const confirmarModificacionOro = () => {
+    if (jugadorEnModificacion) {
+      const limpio = isNaN(cantidadTemporal) ? 0 : Math.max(0, Math.floor(cantidadTemporal));
+      cambiarOroManual(jugadorEnModificacion.id, limpio);
+      cerrarModalModificarOro();
+    }
+  };
+
+  const abrirModalSumaResta = (player: Player, operacion: 'suma' | 'resta') => {
+    setJugadorSumaResta(player);
+    setTipoOperacion(operacion);
+    setCantidadSumaResta(0);
+    setModalSumaRestaAbierto(true);
+  };
+
+  const cerrarModalSumaResta = () => {
+    setModalSumaRestaAbierto(false);
+    setJugadorSumaResta(null);
+    setCantidadSumaResta(0);
+  };
+
+  const confirmarSumaResta = () => {
+    if (jugadorSumaResta && cantidadSumaResta > 0) {
+      const cantidadLimpia = Math.max(0, Math.floor(cantidadSumaResta));
+      const valorActual = oroBanco[jugadorSumaResta.id] || 0;
+      let nuevoValor = valorActual;
+
+      if (tipoOperacion === 'suma') {
+        nuevoValor = valorActual + cantidadLimpia;
+      } else {
+        nuevoValor = Math.max(0, valorActual - cantidadLimpia);
+      }
+
+      cambiarOroManual(jugadorSumaResta.id, nuevoValor);
+      cerrarModalSumaResta();
+    }
+  };
+
   const abrirModalRetiro = () => {
     setModalAbierto(true);
     setModalTasa(tasaOroUsd);
-    setRetirosDraft({
-      alan: 0,
-      carlitos: 0,
-      criss: 0,
-      foquita: 0,
-      tommy: 0,
+    
+    // Inicializar retirosDraft con todos los miembros
+    const nuevoRetirosDraft: Record<PlayerId, number> = {};
+    members.forEach((member) => {
+      nuevoRetirosDraft[member.id] = 0;
+    });
+    setRetirosDraft(nuevoRetirosDraft);
+    
+    // Asegurar que oroBanco tenga todos los miembros inicializados en 0
+    setOroBanco((prev) => {
+      const nuevoOroBanco = { ...prev };
+      members.forEach((member) => {
+        if (!(member.id in nuevoOroBanco)) {
+          nuevoOroBanco[member.id] = 0;
+        }
+      });
+      return nuevoOroBanco;
     });
   };
 
@@ -248,17 +345,18 @@ export default function HomePage() {
   const confirmarRetiro = () => {
     const tasaAplicada = modalTasa !== null && modalTasa !== undefined ? modalTasa : tasaOroUsd;
 
-    const hayAlgo = PLAYERS.some((p) => retirosDraft[p.id] > 0);
+    const hayAlgo = members.some((p) => retirosDraft[p.id] > 0);
     if (!hayAlgo) {
       alert('Pon al menos un retiro mayor a 0.');
       return;
     }
 
-    for (const p of PLAYERS) {
+    for (const p of members) {
       const cant = retirosDraft[p.id];
-      if (cant > oroBanco[p.id]) {
+      const disponible = oroBanco[p.id] ?? 0;
+      if (cant > disponible) {
         alert(
-          `No hay suficiente ${unidadLabel} en el banco para ${p.nombre}. Disponible: ${oroBanco[p.id]}, pedido: ${cant}`
+          `No hay suficiente ${unidadLabel} en el banco para ${p.nombre}. Disponible: ${disponible}, pedido: ${cant}`
         );
         return;
       }
@@ -268,12 +366,13 @@ export default function HomePage() {
     const nuevos: Withdrawal[] = [];
     const nuevoOroBanco: Record<PlayerId, number> = { ...oroBanco };
 
-    for (const p of PLAYERS) {
+    for (const p of members) {
       const cant = retirosDraft[p.id];
       if (cant <= 0) continue;
 
       const usd = cant * tasaAplicada;
-      nuevoOroBanco[p.id] = nuevoOroBanco[p.id] - cant;
+      const saldoActual = nuevoOroBanco[p.id] ?? 0;
+      nuevoOroBanco[p.id] = saldoActual - cant;
 
       nuevos.push({
         id: crypto.randomUUID(),
@@ -315,6 +414,103 @@ export default function HomePage() {
     const nuevos = withdrawals.map((w) => (w.id === id ? { ...w, estado } : w));
     setWithdrawals(nuevos);
     pendingSyncRef.current = { withdrawals: nuevos, oroBanco };
+  };
+
+  // Funciones para manejar miembros
+  const abrirModalMiembros = () => {
+    setModalMiembrosAbierto(true);
+    setMiembroEnEdicion(null);
+    setNuevoMiembroNombre('');
+  };
+
+  const cerrarModalMiembros = () => {
+    setModalMiembrosAbierto(false);
+    setMiembroEnEdicion(null);
+    setNuevoMiembroNombre('');
+  };
+
+  const agregarMiembro = () => {
+    if (!nuevoMiembroNombre.trim()) {
+      alert('Por favor ingresa un nombre para el miembro');
+      return;
+    }
+
+    const nombreExistente = members.some(
+      (m) => m.nombre.toLowerCase() === nuevoMiembroNombre.toLowerCase()
+    );
+    if (nombreExistente) {
+      alert('Este miembro ya existe');
+      return;
+    }
+
+    const nuevoId = nuevoMiembroNombre.toLowerCase().replace(/\s+/g, '_');
+    const nuevoMiembro: Player = { id: nuevoId, nombre: nuevoMiembroNombre };
+    
+    // Actualizar todo de una vez para evitar inconsistencias
+    setMembers((prevMembers) => [...prevMembers, nuevoMiembro]);
+    setOroBanco((prev) => ({
+      ...prev,
+      [nuevoId]: 0,
+    }));
+    setRetirosDraft((prev) => ({
+      ...prev,
+      [nuevoId]: 0,
+    }));
+
+    setNuevoMiembroNombre('');
+  };
+
+  const editarMiembro = (memberActual: Player) => {
+    setMiembroEnEdicion(memberActual);
+    setNuevoMiembroNombre(memberActual.nombre);
+  };
+
+  const guardarEdicionMiembro = () => {
+    if (!nuevoMiembroNombre.trim()) {
+      alert('Por favor ingresa un nombre para el miembro');
+      return;
+    }
+
+    if (miembroEnEdicion) {
+      const nombreExistente = members.some(
+        (m) =>
+          m.nombre.toLowerCase() === nuevoMiembroNombre.toLowerCase() &&
+          m.id !== miembroEnEdicion.id
+      );
+      if (nombreExistente) {
+        alert('Este nombre ya existe en otro miembro');
+        return;
+      }
+
+      setMembers(
+        members.map((m) =>
+          m.id === miembroEnEdicion.id ? { ...m, nombre: nuevoMiembroNombre } : m
+        )
+      );
+
+      setMiembroEnEdicion(null);
+      setNuevoMiembroNombre('');
+    }
+  };
+
+  const eliminarMiembro = (memberId: PlayerId) => {
+    if (window.confirm('¿Estás seguro de que deseas eliminar este miembro?')) {
+      setMembers(members.filter((m) => m.id !== memberId));
+
+      // Eliminar del banco de oro
+      setOroBanco((prev) => {
+        const newBanco = { ...prev };
+        delete newBanco[memberId];
+        return newBanco;
+      });
+
+      // Eliminar del estado de retiros draft
+      setRetirosDraft((prev) => {
+        const newDraft = { ...prev };
+        delete newDraft[memberId];
+        return newDraft;
+      });
+    }
   };
 
   const handleGuardar = async () => {
@@ -414,52 +610,138 @@ export default function HomePage() {
           <section className="panel">
             <div className="panel-header banco panel-header-flex">
               <h2>Banco</h2>
-              <button
-                type="button"
-                className="btn-primary"
-                onClick={abrirModalRetiro}
-              >
-                Retirar
-              </button>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={abrirModalMiembros}
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                    transition: 'all 0.2s ease',
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.4)';
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+                    e.currentTarget.style.transform = 'translateY(0)';
+                  }}
+                >
+                  👥 Miembros
+                </button>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={abrirModalRetiro}
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                    transition: 'all 0.2s ease',
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.4)';
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+                    e.currentTarget.style.transform = 'translateY(0)';
+                  }}
+                >
+                  Retirar
+                </button>
+              </div>
             </div>
             <div className="panel-body">
               <table className="table">
                 <thead>
                   <tr>
                     <th>Nombre</th>
-                    <th>{unidadLabel}</th>
+                    <th style={{ width: '100%' }}></th>
                     <th></th>
-                    <th>Total</th>
+                    <th>{unidadLabel}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {PLAYERS.map((p) => (
+                  {members.map((p) => (
                     <tr key={p.id}>
                       <td>{p.nombre}</td>
+                      <td style={{ width: '100%' }}></td>
                       <td>
-                        <input
-                          className="input-oro"
-                          type="number"
-                          min={0}
-                          step={1}
-                          value={oroBanco[p.id]}
-                          onChange={(e) =>
-                            cambiarOroManual(
-                              p.id,
-                              parseFloat(e.target.value || '0')
-                            )
-                          }
-                        />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-end' }}>
+                          <button
+                            type="button"
+                            onClick={() => abrirModalSumaResta(p, 'resta')}
+                            style={{
+                              padding: '4px 8px',
+                              borderRadius: '4px',
+                              border: '1px solid #ef4444',
+                              backgroundColor: '#ef4444',
+                              color: 'white',
+                              cursor: 'pointer',
+                              fontSize: '14px',
+                              fontWeight: '700',
+                              transition: 'all 0.2s ease',
+                              minWidth: '32px',
+                              textAlign: 'center',
+                            }}
+                            onMouseOver={(e) => {
+                              e.currentTarget.style.backgroundColor = '#dc2626';
+                              e.currentTarget.style.borderColor = '#dc2626';
+                            }}
+                            onMouseOut={(e) => {
+                              e.currentTarget.style.backgroundColor = '#ef4444';
+                              e.currentTarget.style.borderColor = '#ef4444';
+                            }}
+                          >
+                            −
+                          </button>
+                          <span style={{ fontWeight: '600', minWidth: '60px', textAlign: 'center', fontSize: '18px' }}>
+                            {oroBanco[p.id] ?? 0}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => abrirModalSumaResta(p, 'suma')}
+                            style={{
+                              padding: '4px 8px',
+                              borderRadius: '4px',
+                              border: '1px solid #22c55e',
+                              backgroundColor: '#22c55e',
+                              color: 'white',
+                              cursor: 'pointer',
+                              fontSize: '14px',
+                              fontWeight: '700',
+                              transition: 'all 0.2s ease',
+                              minWidth: '32px',
+                              textAlign: 'center',
+                            }}
+                            onMouseOver={(e) => {
+                              e.currentTarget.style.backgroundColor = '#16a34a';
+                              e.currentTarget.style.borderColor = '#16a34a';
+                            }}
+                            onMouseOut={(e) => {
+                              e.currentTarget.style.backgroundColor = '#22c55e';
+                              e.currentTarget.style.borderColor = '#22c55e';
+                            }}
+                          >
+                            +
+                          </button>
+                        </div>
                       </td>
-                      <td>
+                      <td style={{ fontSize: '16px', fontWeight: '600', textAlign: 'center' }}>
                         <span className="badge">{unidadLabel}</span>
                       </td>
-                      <td>{oroBanco[p.id]}</td>
                     </tr>
                   ))}
                   <tr className="fila-total">
-                    <td colSpan={3}>Total {unidadLabel} en banco</td>
-                    <td>{totalOroBanco}</td>
+                    <td>Total {unidadLabel} en banco</td>
+                    <td style={{ width: '100%' }}></td>
+                    <td colSpan={2} style={{ fontSize: '18px', fontWeight: '700', textAlign: 'center' }}>{totalOroBanco}</td>
                   </tr>
                 </tbody>
               </table>
@@ -482,7 +764,7 @@ export default function HomePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {PLAYERS.map((p) => {
+                  {members.map((p) => {
                     const data = balancesPorJugador[p.id];
                     const usdPendiente = data.usdPendiente;
                     const tienePendiente = data.tienePendiente;
@@ -545,6 +827,7 @@ export default function HomePage() {
                     <th>Tasa</th>
                     <th>Monto ({simboloUsd})</th>
                     <th>Estado</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -571,6 +854,35 @@ export default function HomePage() {
                           <option value="Pendiente">Pendiente</option>
                         </select>
                       </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm('¿Estás seguro de que deseas eliminar este retiro?')) {
+                              setWithdrawals(withdrawals.filter((item) => item.id !== w.id));
+                            }
+                          }}
+                          style={{
+                            padding: '4px 8px',
+                            borderRadius: '4px',
+                            border: 'none',
+                            backgroundColor: '#ef4444',
+                            color: 'white',
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                            fontWeight: '600',
+                            transition: 'all 0.2s ease',
+                          }}
+                          onMouseOver={(e) => {
+                            e.currentTarget.style.backgroundColor = '#dc2626';
+                          }}
+                          onMouseOut={(e) => {
+                            e.currentTarget.style.backgroundColor = '#ef4444';
+                          }}
+                        >
+                          ✕
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -596,11 +908,12 @@ export default function HomePage() {
                 Ratio (1 {unidadLabel} = ? {simboloUsd})
                 <input
                   type="number"
-                  step="any"  {/* allow arbitrary precision, no rounding by step */}
+                  step="any"
                   value={modalTasa ?? tasaOroUsd}
-                  onChange={(e) =>
-                    setModalTasa(parseFloat(e.target.value || '0'))
-                  }
+                  onChange={(e) => {
+                    const valor = parseFloat(e.target.value || '0');
+                    setModalTasa(isNaN(valor) ? 0 : valor);
+                  }}
                 />
               </label>
 
@@ -614,7 +927,7 @@ export default function HomePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {PLAYERS.map((p) => {
+                  {members.map((p) => {
                     const cant = retirosDraft[p.id] || 0;
                     const disponible = oroBanco[p.id] || 0;
                     const tasa = modalTasa ?? tasaOroUsd;
@@ -630,13 +943,14 @@ export default function HomePage() {
                             type="number"
                             min={0}
                             step={1}
-                            value={cant}
+                            value={cant === 0 ? '' : cant}
                             onChange={(e) =>
                               cambiarDraftJugador(
                                 p.id,
                                 parseFloat(e.target.value || '0')
                               )
                             }
+                            placeholder="0"
                           />
                         </td>
                         <td>{formatearNumero(usd)}</td>
@@ -656,6 +970,358 @@ export default function HomePage() {
                   onClick={confirmarRetiro}
                 >
                   Confirmar retiros
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal de gestión de miembros */}
+        {modalMiembrosAbierto && (
+          <div className="modal-backdrop" onClick={cerrarModalMiembros}>
+            <div
+              className="modal modal-large"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3>Gestionar Miembros</h3>
+
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', fontSize: '13px', color: '#9ca3af', marginBottom: '10px', fontWeight: '600' }}>
+                  {miembroEnEdicion ? 'Editar Miembro' : 'Agregar Nuevo Miembro'}
+                </label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="text"
+                    placeholder="Nombre del miembro"
+                    value={nuevoMiembroNombre}
+                    onChange={(e) => setNuevoMiembroNombre(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        if (miembroEnEdicion) {
+                          guardarEdicionMiembro();
+                        } else {
+                          agregarMiembro();
+                        }
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      border: '1px solid #374151',
+                      fontSize: '14px',
+                      color: '#e5e7eb',
+                      backgroundColor: '#020617',
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={
+                      miembroEnEdicion ? guardarEdicionMiembro : agregarMiembro
+                    }
+                    style={{
+                      padding: '8px 16px',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                    }}
+                  >
+                    {miembroEnEdicion ? 'Guardar' : 'Agregar'}
+                  </button>
+                  {miembroEnEdicion && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMiembroEnEdicion(null);
+                        setNuevoMiembroNombre('');
+                      }}
+                      style={{
+                        padding: '8px 16px',
+                        borderRadius: '6px',
+                        border: '1px solid #374151',
+                        backgroundColor: '#0b1120',
+                        color: '#e5e7eb',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', color: '#9ca3af', marginBottom: '10px', fontWeight: '600' }}>
+                  Miembros Actuales
+                </label>
+                {members.length === 0 ? (
+                  <p className="caption">No hay miembros.</p>
+                ) : (
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
+                      gap: '10px',
+                    }}
+                  >
+                    {members.map((member) => (
+                      <div
+                        key={member.id}
+                        style={{
+                          padding: '12px',
+                          borderRadius: '6px',
+                          backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                          border: '1px solid #374151',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          gap: '12px',
+                        }}
+                      >
+                        <div>
+                          <p style={{ margin: '0', fontWeight: '600', color: '#e5e7eb', fontSize: '14px' }}>
+                            {member.nombre}
+                          </p>
+                          <p
+                            style={{
+                              margin: '4px 0 0 0',
+                              fontSize: '12px',
+                              color: '#9ca3af',
+                            }}
+                          >
+                            {oroBanco[member.id] || 0} {unidadLabel}
+                          </p>
+                        </div>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button
+                            type="button"
+                            onClick={() => editarMiembro(member)}
+                            style={{
+                              padding: '6px 10px',
+                              borderRadius: '4px',
+                              border: 'none',
+                              backgroundColor: '#3b82f6',
+                              color: 'white',
+                              cursor: 'pointer',
+                              fontSize: '12px',
+                              fontWeight: '600',
+                              transition: 'all 0.2s ease',
+                            }}
+                            onMouseOver={(e) => {
+                              e.currentTarget.style.backgroundColor = '#2563eb';
+                            }}
+                            onMouseOut={(e) => {
+                              e.currentTarget.style.backgroundColor = '#3b82f6';
+                            }}
+                          >
+                            ✎ Editar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => eliminarMiembro(member.id)}
+                            style={{
+                              padding: '6px 10px',
+                              borderRadius: '4px',
+                              border: 'none',
+                              backgroundColor: '#ef4444',
+                              color: 'white',
+                              cursor: 'pointer',
+                              fontSize: '12px',
+                              fontWeight: '600',
+                              transition: 'all 0.2s ease',
+                            }}
+                            onMouseOver={(e) => {
+                              e.currentTarget.style.backgroundColor = '#dc2626';
+                            }}
+                            onMouseOut={(e) => {
+                              e.currentTarget.style.backgroundColor = '#ef4444';
+                            }}
+                          >
+                            ✕ Eliminar
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="modal-actions">
+                <button type="button" onClick={cerrarModalMiembros}>
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal para modificar oro */}
+        {modalModificarOroAbierto && jugadorEnModificacion && (
+          <div className="modal-backdrop" onClick={cerrarModalModificarOro}>
+            <div
+              className="modal"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3>Modificar {unidadLabel} - {jugadorEnModificacion.nombre}</h3>
+              <p className="caption">
+                Usa los botones para agregar o quitar {unidadLabel}, o ingresa la cantidad directamente.
+              </p>
+
+              <div style={{ marginTop: '20px', marginBottom: '20px' }}>
+                <label style={{ display: 'block', marginBottom: '12px' }}>
+                  Cantidad de {unidadLabel}
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', justifyContent: 'center' }}>
+                  <button
+                    type="button"
+                    onClick={quitarOro}
+                    style={{
+                      padding: '10px 16px',
+                      borderRadius: '6px',
+                      border: '1px solid #ef4444',
+                      backgroundColor: '#ef4444',
+                      color: '#fff',
+                      cursor: 'pointer',
+                      fontSize: '18px',
+                      fontWeight: '700',
+                      transition: 'all 0.2s ease',
+                    }}
+                    onMouseOver={(e) => {
+                      e.currentTarget.style.backgroundColor = '#dc2626';
+                      e.currentTarget.style.borderColor = '#dc2626';
+                    }}
+                    onMouseOut={(e) => {
+                      e.currentTarget.style.backgroundColor = '#ef4444';
+                      e.currentTarget.style.borderColor = '#ef4444';
+                    }}
+                  >
+                    −
+                  </button>
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={cantidadTemporal}
+                    onChange={(e) => setCantidadTemporal(parseFloat(e.target.value || '0'))}
+                    style={{
+                      width: '100px',
+                      padding: '10px',
+                      borderRadius: '6px',
+                      border: '1px solid #f97316',
+                      backgroundColor: '#020617',
+                      color: '#e5e7eb',
+                      fontSize: '18px',
+                      fontWeight: '700',
+                      textAlign: 'center',
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={agregarOro}
+                    style={{
+                      padding: '10px 16px',
+                      borderRadius: '6px',
+                      border: '1px solid #22c55e',
+                      backgroundColor: '#22c55e',
+                      color: '#fff',
+                      cursor: 'pointer',
+                      fontSize: '18px',
+                      fontWeight: '700',
+                      transition: 'all 0.2s ease',
+                    }}
+                    onMouseOver={(e) => {
+                      e.currentTarget.style.backgroundColor = '#16a34a';
+                      e.currentTarget.style.borderColor = '#16a34a';
+                    }}
+                    onMouseOut={(e) => {
+                      e.currentTarget.style.backgroundColor = '#22c55e';
+                      e.currentTarget.style.borderColor = '#22c55e';
+                    }}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              <div className="modal-actions">
+                <button type="button" onClick={cerrarModalModificarOro}>
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={confirmarModificacionOro}
+                >
+                  Confirmar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal para sumar/restar oro */}
+        {modalSumaRestaAbierto && jugadorSumaResta && (
+          <div className="modal-backdrop" onClick={cerrarModalSumaResta}>
+            <div
+              className="modal"
+              style={{ maxWidth: '300px' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3>
+                {tipoOperacion === 'suma' ? 'Agregar' : 'Restar'} {unidadLabel} - {jugadorSumaResta.nombre}
+              </h3>
+              <p className="caption">
+                {tipoOperacion === 'suma' 
+                  ? `Ingresa la cantidad de ${unidadLabel} a agregar` 
+                  : `Ingresa la cantidad de ${unidadLabel} a restar`}
+              </p>
+
+              <div style={{ marginTop: '20px', marginBottom: '20px' }}>
+                <label style={{ display: 'block', marginBottom: '12px', fontSize: '13px', color: '#9ca3af', fontWeight: '600' }}>
+                  Cantidad
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={cantidadSumaResta === 0 ? '' : cantidadSumaResta}
+                  onChange={(e) => setCantidadSumaResta(parseFloat(e.target.value || '0'))}
+                  placeholder="0"
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    borderRadius: '6px',
+                    border: '1px solid #374151',
+                    backgroundColor: '#020617',
+                    color: '#e5e7eb',
+                    fontSize: '16px',
+                    fontWeight: '600',
+                    textAlign: 'center',
+                  }}
+                  autoFocus
+                />
+              </div>
+
+              <div className="modal-actions">
+                <button type="button" onClick={cerrarModalSumaResta}>
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={confirmarSumaResta}
+                  style={{
+                    backgroundColor: tipoOperacion === 'suma' ? '#22c55e' : '#ef4444',
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.backgroundColor = tipoOperacion === 'suma' ? '#16a34a' : '#dc2626';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.backgroundColor = tipoOperacion === 'suma' ? '#22c55e' : '#ef4444';
+                  }}
+                >
+                  {tipoOperacion === 'suma' ? 'Agregar' : 'Restar'}
                 </button>
               </div>
             </div>
