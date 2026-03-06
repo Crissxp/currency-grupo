@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
-    const { action, withdrawals, oroBanco } = await request.json();
+    const { action, withdrawals, oroBanco, members } = await request.json();
 
     if (action === 'sync') {
       // Limpiar toda la hoja
@@ -12,6 +12,10 @@ export async function POST(request: NextRequest) {
       // fila especial que guardará los valores de oroBanco en JSON
       const bankRow = ['__bank__', JSON.stringify(oroBanco || {})];
       await appendToSheet([bankRow]);
+
+      // fila especial para miembros (lista serializada)
+      const membersRow = ['__members__', JSON.stringify(members || [])];
+      await appendToSheet([membersRow]);
 
       // fila de encabezados para los retiros (para lectura humana)
       const header = ['fecha', 'nombre', 'oro', 'tasa', 'usd', 'estado'];

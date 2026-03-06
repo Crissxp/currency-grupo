@@ -12,17 +12,35 @@ export async function GET() {
       foquita: 0,
       tommy: 0,
     };
+    let membersFromSheet: any[] | null = null;
     let dataRows: any[][] = [];
 
     if (rows.length && rows[0][0] === '__bank__') {
       try {
         oroBanco = JSON.parse(rows[0][1] || '{}');
       } catch {}
-      // saltamos la fila de bank y la de encabezados
-      dataRows = rows.slice(2);
+      // puede haber una fila de miembros justo después del bank
+      if (rows[1] && rows[1][0] === '__members__') {
+        try {
+          membersFromSheet = JSON.parse(rows[1][1] || '[]');
+        } catch {}
+        // saltamos bank + members + encabezados
+        dataRows = rows.slice(3);
+      } else {
+        // saltamos bank + encabezados
+        dataRows = rows.slice(2);
+      }
     } else {
       // si no hay fila de banco usamos lo restante sin primera fila de encabezados
-      dataRows = rows.slice(1);
+      // si la primer fila es __members__, procesarla
+      if (rows[0] && rows[0][0] === '__members__') {
+        try {
+          membersFromSheet = JSON.parse(rows[0][1] || '[]');
+        } catch {}
+        dataRows = rows.slice(2);
+      } else {
+        dataRows = rows.slice(1);
+      }
     }
 
     const data = (dataRows || []).map((r) => ({
@@ -34,7 +52,7 @@ export async function GET() {
       estado: r[5] || null,
     }));
 
-    return NextResponse.json({ success: true, data, oroBanco });
+    return NextResponse.json({ success: true, data, oroBanco, members: membersFromSheet });
   } catch (error) {
     console.error('Error loading sheet:', error);
     return NextResponse.json({ success: false, message: 'Error loading sheet' }, { status: 500 });

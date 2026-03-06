@@ -49,6 +49,7 @@ export default function HomePage() {
   const pendingSyncRef = useRef<{
     withdrawals: Withdrawal[];
     oroBanco: Record<PlayerId, number>;
+    members: Player[];
   } | null>(null);
 
   // Modal de miembros
@@ -115,6 +116,7 @@ export default function HomePage() {
   const sincronizarConSheet = async (
     currentWithdrawals: Withdrawal[] = withdrawals,
     currentBank: Record<PlayerId, number> = oroBanco,
+    currentMembers: Player[] = members,
     showAlert = true
   ) => {
     setSincronizando(true);
@@ -126,6 +128,7 @@ export default function HomePage() {
           action: 'sync',
           withdrawals: currentWithdrawals,
           oroBanco: currentBank,
+          members: currentMembers,
         }),
       });
 
@@ -151,6 +154,28 @@ export default function HomePage() {
       const res = await fetch('/api/load');
       const json = await res.json();
       if (json.success) {
+        // si la hoja contiene una lista de miembros guardada, úsala
+        if (json.members && Array.isArray(json.members)) {
+          try {
+            const sheetMembers = json.members as Player[];
+            setMembers(sheetMembers);
+            // asegurar retirosDraft y oroBanco para cada miembro
+            setRetirosDraft((prevDraft) => {
+              const next = { ...prevDraft } as Record<PlayerId, number>;
+              sheetMembers.forEach((m) => {
+                if (!(m.id in next)) next[m.id] = 0;
+              });
+              return next;
+            });
+            setOroBanco((prev) => {
+              const next = { ...prev } as Record<PlayerId, number>;
+              sheetMembers.forEach((m) => {
+                if (!(m.id in next)) next[m.id] = 0;
+              });
+              return next;
+            });
+          } catch {}
+        }
         if (json.oroBanco) {
           // sincronizamos el estado del banco con lo remoto
           const bank = json.oroBanco as Record<string, number>;
@@ -299,7 +324,7 @@ export default function HomePage() {
     const nuevoBanco = { ...oroBanco, [playerId]: limpio };
     setOroBanco(nuevoBanco);
     // mark pending state so save sends the latest values
-    pendingSyncRef.current = { withdrawals, oroBanco: nuevoBanco };
+    pendingSyncRef.current = { withdrawals, oroBanco: nuevoBanco, members };
   };
 
   const abrirModalModificarOro = (player: Player) => {
@@ -453,7 +478,7 @@ export default function HomePage() {
     const nuevosState = [...nuevos, ...withdrawals];
     setWithdrawals(nuevosState);
     // marcar pending para que el botón Guardar use esta versión si se presiona inmediatamente
-    pendingSyncRef.current = { withdrawals: nuevosState, oroBanco: nuevoOroBanco };
+    pendingSyncRef.current = { withdrawals: nuevosState, oroBanco: nuevoOroBanco, members };
     cerrarModalRetiro();
   };
 
@@ -468,13 +493,13 @@ export default function HomePage() {
       w.playerId === playerId ? { ...w, estado: estadoInterno } : w
     );
     setWithdrawals(nuevos);
-    pendingSyncRef.current = { withdrawals: nuevos, oroBanco };
+    pendingSyncRef.current = { withdrawals: nuevos, oroBanco, members };
   };
 
   const cambiarEstadoHistorial = (id: string, estado: WithdrawalStatus) => {
     const nuevos = withdrawals.map((w) => (w.id === id ? { ...w, estado } : w));
     setWithdrawals(nuevos);
-    pendingSyncRef.current = { withdrawals: nuevos, oroBanco };
+    pendingSyncRef.current = { withdrawals: nuevos, oroBanco, members };
   };
 
   // Funciones para manejar miembros
@@ -576,10 +601,10 @@ export default function HomePage() {
 
   const handleGuardar = async () => {
     const toSend = pendingSyncRef.current
-      ? { withdrawals: pendingSyncRef.current.withdrawals, oro: pendingSyncRef.current.oroBanco }
-      : { withdrawals, oro: oroBanco };
+      ? { withdrawals: pendingSyncRef.current.withdrawals, oro: pendingSyncRef.current.oroBanco, members: pendingSyncRef.current.members }
+      : { withdrawals, oro: oroBanco, members };
 
-    await sincronizarConSheet(toSend.withdrawals, toSend.oro, true);
+    await sincronizarConSheet(toSend.withdrawals, toSend.oro, toSend.members, true);
     // limpiar pending al terminar
     pendingSyncRef.current = null;
   };
@@ -587,7 +612,7 @@ export default function HomePage() {
   const limpiarHistorial = () => {
     if (window.confirm('¿Estás seguro de que quieres limpiar el historial completo?')) {
       setWithdrawals([]);
-      pendingSyncRef.current = { withdrawals: [], oroBanco };
+      pendingSyncRef.current = { withdrawals: [], oroBanco, members };
     }
   };
 
