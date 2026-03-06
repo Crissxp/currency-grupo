@@ -158,7 +158,7 @@ export default function HomePage() {
 
         // detectar nombres que vienen en la hoja y que no están en `members`
         const rawRows = (json.data || []).filter((r: any) => r && r.fecha && r.nombre);
-        const namesInSheet = Array.from(new Set(rawRows.map((r: any) => r.nombre)));
+        const namesInSheet = Array.from(new Set(rawRows.map((r: any) => r.nombre))) as string[];
         const missingNames = namesInSheet.filter((n: string) => !members.some((m) => m.nombre === n));
 
         // crear jugadores faltantes y actualizar estados locales para incluirlos
