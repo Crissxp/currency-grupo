@@ -155,13 +155,49 @@ export default function HomePage() {
           // sincronizamos el estado del banco con lo remoto
           setOroBanco((prev) => ({ ...prev, ...json.oroBanco }));
         }
-        // convertir a Withdrawal si es necesario
-        const sheetData: Withdrawal[] = (json.data || [])
-          .filter((r: any) => r && r.fecha && r.nombre) // descartar filas incompletas
-          .map((r: any) => ({
-            id: r.fecha + r.nombre,
-            playerId: members.find((p) => p.nombre === r.nombre)?.id as PlayerId,
-            nombre: r.nombre,
+
+        // detectar nombres que vienen en la hoja y que no están en `members`
+        const rawRows = (json.data || []).filter((r: any) => r && r.fecha && r.nombre);
+        const namesInSheet = Array.from(new Set(rawRows.map((r: any) => r.nombre)));
+        const missingNames = namesInSheet.filter((n: string) => !members.some((m) => m.nombre === n));
+
+        // crear jugadores faltantes y actualizar estados locales para incluirlos
+        if (missingNames.length > 0) {
+          const newPlayers: Player[] = missingNames.map((name) => {
+            const id = name.toLowerCase().replace(/\s+/g, '_');
+            return { id, nombre: name };
+          });
+          const updatedMembers = [...members, ...newPlayers];
+          setMembers(updatedMembers);
+
+          setOroBanco((prev) => {
+            const next = { ...prev } as Record<PlayerId, number>;
+            newPlayers.forEach((p) => {
+              if (!(p.id in next)) next[p.id] = 0;
+            });
+            return next;
+          });
+
+          setRetirosDraft((prev) => {
+            const next = { ...prev } as Record<PlayerId, number>;
+            newPlayers.forEach((p) => {
+              if (!(p.id in next)) next[p.id] = 0;
+            });
+            return next;
+          });
+        }
+
+        // convertir a Withdrawal usando la lista actualizada de miembros (si hubo nuevos, los añadimos arriba)
+        const sheetData: Withdrawal[] = rawRows.map((r: any) => {
+          const nombre: string = r.nombre;
+          const id = (members.find((p) => p.nombre === nombre) ||
+            // si setMembers se ejecutó antes, use también el id generado anteriormente
+            { id: nombre.toLowerCase().replace(/\s+/g, '_') }).id as PlayerId;
+
+          return {
+            id: r.fecha + nombre,
+            playerId: id,
+            nombre,
             oro: r.oro,
             tasa:
               r.tasa !== undefined && r.tasa !== null
@@ -170,7 +206,8 @@ export default function HomePage() {
             usd: r.usd,
             fecha: r.fecha,
             estado: r.estado || 'pendiente',
-          }));
+          } as Withdrawal;
+        });
         // solo actualizamos si hay diferencias reales para no borrar cambios
         setWithdrawals((prev) => {
           const prevStr = JSON.stringify(prev);
