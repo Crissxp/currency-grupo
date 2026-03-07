@@ -853,6 +853,10 @@ export default function HomePage() {
   };
 
   const limpiarHistorial = () => {
+    if (!currentUser?.permissions?.manageUsers) {
+      alert('Solo administradores pueden limpiar el historial');
+      return;
+    }
     if (window.confirm('¿Estás seguro de que quieres limpiar el historial completo?')) {
       setWithdrawals([]);
       pendingSyncRef.current = { withdrawals: [], oroBanco, members };
@@ -860,6 +864,10 @@ export default function HomePage() {
   };
 
   const limpiarHistorialBanco = () => {
+    if (!currentUser?.permissions?.manageUsers) {
+      alert('Solo administradores pueden limpiar el historial del banco');
+      return;
+    }
     if (window.confirm('¿Limpiar historial de operaciones del banco?')) {
       setBankHistory([]);
     }
@@ -1313,11 +1321,14 @@ export default function HomePage() {
               </button>
             </div>
             <div>
-              {historialTab === 'retiros' && withdrawals.length > 0 && (
+              {historialTab === 'retiros' && withdrawals.length > 0 && currentUser?.permissions?.manageUsers && (
                 <button onClick={limpiarHistorial} className="btn-clear-history">Limpiar historial</button>
               )}
-              {historialTab === 'banco' && bankHistory.length > 0 && (
+              {historialTab === 'banco' && bankHistory.length > 0 && currentUser?.permissions?.manageUsers && (
                 <button onClick={limpiarHistorialBanco} className="btn-clear-history">Limpiar historial banco</button>
+              )}
+              {((historialTab === 'retiros' && withdrawals.length > 0) || (historialTab === 'banco' && bankHistory.length > 0)) && !currentUser?.permissions?.manageUsers && (
+                <span style={{ fontSize: 12, color: '#9ca3af' }}>Solo administradores pueden limpiar historiales</span>
               )}
             </div>
           </div>
