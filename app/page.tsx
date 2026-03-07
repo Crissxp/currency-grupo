@@ -227,6 +227,8 @@ export default function HomePage() {
           withdrawals: currentWithdrawals,
           oroBanco: currentBank,
           members: currentMembers,
+          users,
+          bankHistory,
         }),
       });
 
@@ -272,6 +274,19 @@ export default function HomePage() {
               });
               return next;
             });
+          } catch {}
+        }
+        // cargar usuarios si vienen desde el sheet
+        if (json.users && Array.isArray(json.users)) {
+          try {
+            setUsers(json.users);
+          } catch {}
+        }
+
+        // cargar historial del banco si viene
+        if (json.bankHistory && Array.isArray(json.bankHistory)) {
+          try {
+            setBankHistory(json.bankHistory);
           } catch {}
         }
         if (json.oroBanco) {
