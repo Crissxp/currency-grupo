@@ -13,35 +13,44 @@ export async function GET() {
       tommy: 0,
     };
     let membersFromSheet: any[] | null = null;
+    let usersFromSheet: any[] | null = null;
+    let bankHistoryFromSheet: any[] | null = null;
     let dataRows: any[][] = [];
 
-    if (rows.length && rows[0][0] === '__bank__') {
+    // parse top rows searching for special markers in order
+    let idx = 0;
+    if (rows[idx] && rows[idx][0] === '__bank__') {
       try {
-        oroBanco = JSON.parse(rows[0][1] || '{}');
+        oroBanco = JSON.parse(rows[idx][1] || '{}');
       } catch {}
-      // puede haber una fila de miembros justo después del bank
-      if (rows[1] && rows[1][0] === '__members__') {
-        try {
-          membersFromSheet = JSON.parse(rows[1][1] || '[]');
-        } catch {}
-        // saltamos bank + members + encabezados
-        dataRows = rows.slice(3);
-      } else {
-        // saltamos bank + encabezados
-        dataRows = rows.slice(2);
-      }
-    } else {
-      // si no hay fila de banco usamos lo restante sin primera fila de encabezados
-      // si la primer fila es __members__, procesarla
-      if (rows[0] && rows[0][0] === '__members__') {
-        try {
-          membersFromSheet = JSON.parse(rows[0][1] || '[]');
-        } catch {}
-        dataRows = rows.slice(2);
-      } else {
-        dataRows = rows.slice(1);
-      }
+      idx++;
     }
+    if (rows[idx] && rows[idx][0] === '__members__') {
+      try {
+        membersFromSheet = JSON.parse(rows[idx][1] || '[]');
+      } catch {}
+      idx++;
+    }
+    if (rows[idx] && rows[idx][0] === '__users__') {
+      try {
+        usersFromSheet = JSON.parse(rows[idx][1] || '[]');
+      } catch {}
+      idx++;
+    }
+    if (rows[idx] && rows[idx][0] === '__bank_history__') {
+      try {
+        bankHistoryFromSheet = JSON.parse(rows[idx][1] || '[]');
+      } catch {}
+      idx++;
+    }
+
+    // now expect header row (fecha, nombre, ...)
+    // skip header if present
+    if (rows[idx] && Array.isArray(rows[idx]) && rows[idx][0] === 'fecha') {
+      idx++;
+    }
+
+    dataRows = rows.slice(idx);
 
     const data = (dataRows || []).map((r) => ({
       fecha: r[0] || null,
@@ -52,7 +61,7 @@ export async function GET() {
       estado: r[5] || null,
     }));
 
-    return NextResponse.json({ success: true, data, oroBanco, members: membersFromSheet });
+    return NextResponse.json({ success: true, data, oroBanco, members: membersFromSheet, users: usersFromSheet, bankHistory: bankHistoryFromSheet });
   } catch (error) {
     console.error('Error loading sheet:', error);
     return NextResponse.json({ success: false, message: 'Error loading sheet' }, { status: 500 });
