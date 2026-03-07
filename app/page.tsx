@@ -444,7 +444,11 @@ export default function HomePage() {
       alert('El nombre de usuario ya existe');
       return;
     }
-    setUsers((prev) => [user, ...prev]);
+    setUsers((prev) => {
+      const next = [user, ...prev];
+      void sincronizarConSheet(undefined, undefined, undefined, false);
+      return next;
+    });
   };
 
   const handleSaveUser = (user: AppUser) => {
@@ -453,6 +457,7 @@ export default function HomePage() {
       setCurrentUser(user);
       localStorage.setItem('currency-grupo-currentUser', JSON.stringify({ username: user.username }));
     }
+    void sincronizarConSheet(undefined, undefined, undefined, false);
   };
 
   const handleDeleteUser = (username: string) => {
@@ -462,6 +467,7 @@ export default function HomePage() {
       setCurrentUser(null);
       localStorage.removeItem('currency-grupo-currentUser');
     }
+    void sincronizarConSheet(undefined, undefined, undefined, false);
   };
 
   // Modal de retiro múltiple
