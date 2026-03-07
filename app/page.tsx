@@ -1374,37 +1374,29 @@ export default function HomePage() {
                           </select>
                         </td>
                         <td style={{ textAlign: 'center' }}>
-                          {(currentUser?.permissions?.manageMembers || currentUser?.permissions?.modifyBank) ? (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (!currentUser?.permissions?.manageMembers && !currentUser?.permissions?.modifyBank) {
-                                  alert('No tienes permiso para eliminar retiros');
-                                  return;
-                                }
-                                if (window.confirm('¿Estás seguro de que deseas eliminar este retiro?')) {
-                                  setWithdrawals(withdrawals.filter((item) => item.id !== w.id));
-                                }
-                              }}
-                              style={{
-                                padding: '4px 8px',
-                                borderRadius: '4px',
-                                border: 'none',
-                                backgroundColor: '#ef4444',
-                                color: 'white',
-                                cursor: 'pointer',
-                                fontSize: '12px',
-                                fontWeight: '600',
-                                transition: 'all 0.2s ease',
-                              }}
-                              onMouseOver={(e) => { e.currentTarget.style.backgroundColor = '#dc2626'; }}
-                              onMouseOut={(e) => { e.currentTarget.style.backgroundColor = '#ef4444'; }}
-                            >
-                              ✕
-                            </button>
-                          ) : (
-                            <button disabled style={{ padding: '4px 8px', borderRadius: '4px', border: 'none', backgroundColor: '#6b7280', color: 'white', fontSize: '12px', fontWeight: '600', opacity: 0.6 }}>✕</button>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm('¿Estás seguro de que deseas eliminar este retiro?')) {
+                                setWithdrawals(withdrawals.filter((item) => item.id !== w.id));
+                              }
+                            }}
+                            style={{
+                              padding: '4px 8px',
+                              borderRadius: '4px',
+                              border: 'none',
+                              backgroundColor: '#ef4444',
+                              color: 'white',
+                              cursor: 'pointer',
+                              fontSize: '12px',
+                              fontWeight: '600',
+                              transition: 'all 0.2s ease',
+                            }}
+                            onMouseOver={(e) => { e.currentTarget.style.backgroundColor = '#dc2626'; }}
+                            onMouseOut={(e) => { e.currentTarget.style.backgroundColor = '#ef4444'; }}
+                          >
+                            ✕
+                          </button>
                         </td>
                       </tr>
                     ))}
