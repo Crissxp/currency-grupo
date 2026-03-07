@@ -10,7 +10,6 @@ type Player = {
 };
 
 type WithdrawalStatus = 'pendiente' | 'pagado';
-
 type Withdrawal = {
   id: string;
   playerId: PlayerId;
@@ -18,8 +17,33 @@ type Withdrawal = {
   oro: number;
   tasa: number;
   usd: number;
-  fecha: string; // ISO
-  estado: WithdrawalStatus;
+  fecha?: string | null;
+  estado?: WithdrawalStatus;
+  actor?: string;
+};
+
+type BankHistoryEntry = {
+  id: string;
+  playerId: PlayerId;
+  nombre: string;
+  delta: number;
+  tipo: 'ajuste' | 'suma' | 'resta' | 'retiro';
+  fecha: string;
+  balance: number;
+  actor?: string;
+};
+
+type AppUser = {
+  username: string;
+  password: string;
+  nombre?: string;
+  permissions?: {
+    manageUsers?: boolean;
+    manageMembers?: boolean;
+    modifyBank?: boolean;
+    retirar?: boolean;
+    sync?: boolean;
+  };
 };
 
 const DEFAULT_PLAYERS: Player[] = [
@@ -45,12 +69,70 @@ export default function HomePage() {
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [sincronizando, setSincronizando] = useState(false);
   const [ultimaSincronizacion, setUltimaSincronizacion] = useState<string | null>(null);
+  const [bankHistory, setBankHistory] = useState<BankHistoryEntry[]>([]);
+  const [historialTab, setHistorialTab] = useState<'retiros' | 'banco'>('retiros');
   const [yaCargoDelSheet, setYaCargoDelSheet] = useState(false);
   const pendingSyncRef = useRef<{
     withdrawals: Withdrawal[];
     oroBanco: Record<PlayerId, number>;
     members: Player[];
+    bankHistory?: BankHistoryEntry[];
   } | null>(null);
+
+  // Autenticación simple (usuarios locales)
+  const [users, setUsers] = useState<AppUser[]>([]);
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
+  const [loginOpen, setLoginOpen] = useState(false);
+  const [loginUser, setLoginUser] = useState('');
+  const [loginPass, setLoginPass] = useState('');
+  const [manageUsersOpen, setManageUsersOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<AppUser | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // asegurar usuario admin por defecto si no existen usuarios
+  useEffect(() => {
+    if (!users || users.length === 0) {
+      const defaultAdmin: AppUser = {
+        username: 'admin',
+        password: 'admin',
+        nombre: 'Administrador',
+        permissions: {
+          manageUsers: true,
+          manageMembers: true,
+          modifyBank: true,
+          retirar: true,
+          sync: true,
+        },
+      };
+      const crissUser: AppUser = {
+        username: 'Crissxp',
+        password: 'Criss154',
+        nombre: 'Crissxp',
+        permissions: {
+          manageUsers: true,
+          manageMembers: true,
+          modifyBank: true,
+          retirar: true,
+          sync: true,
+        },
+      };
+      setUsers([defaultAdmin, crissUser]);
+    }
+  }, []);
+
+  // restaurar sesión si hay usuario guardado en localStorage
+  useEffect(() => {
+    const s = localStorage.getItem('currency-grupo-currentUser');
+    if (s) {
+      try {
+        const parsed = JSON.parse(s);
+        if (parsed && parsed.username && users && users.length > 0) {
+          const found = users.find((u) => u.username === parsed.username);
+          if (found) setCurrentUser(found);
+        }
+      } catch {}
+    }
+  }, [users]);
 
   // Modal de miembros
   const [modalMiembrosAbierto, setModalMiembrosAbierto] = useState(false);
@@ -86,6 +168,19 @@ export default function HomePage() {
           tommy: 0,
         });
         setTasaOroUsd(datos.tasaOroUsd || 0.03);
+        setBankHistory(datos.bankHistory || []);
+          // cargar usuarios y sesión
+          if (datos.users) {
+            setUsers(datos.users);
+          }
+          if (datos.currentUser) {
+            // buscar usuario por username
+            const u = (datos.currentUser.username && datos.currentUser.username) ? datos.currentUser.username : null;
+            if (u) {
+              const found = (datos.users || []).find((x: any) => x.username === u);
+              if (found) setCurrentUser(found);
+            }
+          }
         const ultima = localStorage.getItem('currency-grupo-ultima-sync');
         if (ultima) setUltimaSincronizacion(ultima);
       } catch (e) {
@@ -108,9 +203,12 @@ export default function HomePage() {
       withdrawals,
       oroBanco,
       tasaOroUsd,
+      bankHistory,
       members,
+      users,
+      currentUser,
     }));
-  }, [withdrawals, oroBanco, tasaOroUsd, members]);
+  }, [withdrawals, oroBanco, tasaOroUsd, bankHistory, members, users, currentUser]);
 
   // Sincronizar con Google Sheets
   const sincronizarConSheet = async (
@@ -311,6 +409,46 @@ export default function HomePage() {
   // Fijo: nombre de la unidad
   const unidadLabel = 'oro';
 
+  // --- Autenticación: funciones ---
+  const handleLogin = (username: string, password: string) => {
+    const found = users.find((u) => u.username === username && u.password === password);
+    if (found) {
+      setCurrentUser(found);
+      localStorage.setItem('currency-grupo-currentUser', JSON.stringify({ username: found.username }));
+      setLoginOpen(false);
+      setLoginUser('');
+      setLoginPass('');
+      return true;
+    }
+    alert('Usuario o contraseña incorrectos');
+    return false;
+  };
+
+  const handleCreateUser = (user: AppUser) => {
+    if (users.some((u) => u.username === user.username)) {
+      alert('El nombre de usuario ya existe');
+      return;
+    }
+    setUsers((prev) => [user, ...prev]);
+  };
+
+  const handleSaveUser = (user: AppUser) => {
+    setUsers((prev) => prev.map((u) => (u.username === user.username ? user : u)));
+    if (currentUser && currentUser.username === user.username) {
+      setCurrentUser(user);
+      localStorage.setItem('currency-grupo-currentUser', JSON.stringify({ username: user.username }));
+    }
+  };
+
+  const handleDeleteUser = (username: string) => {
+    if (!window.confirm(`Eliminar usuario ${username}?`)) return;
+    setUsers((prev) => prev.filter((u) => u.username !== username));
+    if (currentUser && currentUser.username === username) {
+      setCurrentUser(null);
+      localStorage.removeItem('currency-grupo-currentUser');
+    }
+  };
+
   // Modal de retiro múltiple
   const [modalAbierto, setModalAbierto] = useState(false);
   const [retirosDraft, setRetirosDraft] = useState<Record<PlayerId, number>>({
@@ -395,7 +533,22 @@ export default function HomePage() {
   const confirmarModificacionOro = () => {
     if (jugadorEnModificacion) {
       const limpio = isNaN(cantidadTemporal) ? 0 : Math.max(0, Math.floor(cantidadTemporal));
+      const previo = oroBanco[jugadorEnModificacion.id] ?? 0;
+      const delta = limpio - previo;
       cambiarOroManual(jugadorEnModificacion.id, limpio);
+      if (delta !== 0) {
+        const entry: BankHistoryEntry = {
+          id: crypto.randomUUID(),
+          playerId: jugadorEnModificacion.id,
+          nombre: jugadorEnModificacion.nombre,
+          delta,
+          tipo: 'ajuste',
+          fecha: new Date().toISOString(),
+          balance: limpio,
+          actor: currentUser?.username || undefined,
+        };
+        setBankHistory((prev) => [entry, ...prev]);
+      }
       cerrarModalModificarOro();
     }
   };
@@ -426,6 +579,20 @@ export default function HomePage() {
       }
 
       cambiarOroManual(jugadorSumaResta.id, nuevoValor);
+      const delta = nuevoValor - valorActual;
+      if (delta !== 0) {
+        const entry: BankHistoryEntry = {
+          id: crypto.randomUUID(),
+          playerId: jugadorSumaResta.id,
+          nombre: jugadorSumaResta.nombre,
+          delta,
+          tipo: tipoOperacion === 'suma' ? 'suma' : 'resta',
+          fecha: new Date().toISOString(),
+          balance: nuevoValor,
+          actor: currentUser?.username || undefined,
+        };
+        setBankHistory((prev) => [entry, ...prev]);
+      }
       cerrarModalSumaResta();
     }
   };
@@ -506,7 +673,20 @@ export default function HomePage() {
         usd,
         fecha: ahora,
         estado: 'pendiente',
+        actor: currentUser?.username || undefined,
       });
+      // registrar en historial del banco la resta por retiro
+      const histEntry: BankHistoryEntry = {
+        id: crypto.randomUUID(),
+        playerId: p.id,
+        nombre: p.nombre,
+        delta: -cant,
+        tipo: 'retiro',
+        fecha: ahora,
+        balance: nuevoOroBanco[p.id],
+        actor: currentUser?.username || undefined,
+      };
+      setBankHistory((prev) => [histEntry, ...prev]);
     }
 
     // aplicar cambios locales
@@ -617,6 +797,11 @@ export default function HomePage() {
   };
 
   const eliminarMiembro = (memberId: PlayerId) => {
+    if (!currentUser?.permissions?.manageMembers) {
+      alert('No tienes permiso para eliminar miembros');
+      return;
+    }
+
     if (window.confirm('¿Estás seguro de que deseas eliminar este miembro?')) {
       setMembers(members.filter((m) => m.id !== memberId));
 
@@ -653,6 +838,12 @@ export default function HomePage() {
     }
   };
 
+  const limpiarHistorialBanco = () => {
+    if (window.confirm('¿Limpiar historial de operaciones del banco?')) {
+      setBankHistory([]);
+    }
+  };
+
   const formatearFecha = (iso?: string | null) => {
     if (!iso) return '';
     const d = new Date(iso);
@@ -668,12 +859,102 @@ export default function HomePage() {
     });
   };
 
+  if (!currentUser) {
+    return (
+      <main className="page" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(180deg,#04050a 0%, #071021 100%)' }}>
+        <div style={{ width: '520px', padding: '40px 56px 40px 36px', borderRadius: '14px', background: 'linear-gradient(180deg,#071021 0%, #081127 100%)', boxShadow: '0 12px 40px rgba(2,6,23,0.8)', color: '#e5e7eb', border: '1px solid rgba(255,255,255,0.03)' }}>
+          <h2 style={{ marginTop: 0, marginBottom: 6, fontSize: '20px' }}>Iniciar sesión</h2>
+          <p className="caption" style={{ marginTop: 0, marginBottom: 18, color: '#9ca3af' }}>Ingresa tu usuario y contraseña para continuar.</p>
+          <label style={{ display: 'block', marginBottom: '12px' }}>
+            <div style={{ fontSize: 13, color: '#9ca3af', marginBottom: 6 }}>Usuario</div>
+            <input value={loginUser} onChange={(e)=>setLoginUser(e.target.value)} style={{ width: '100%', marginTop: '0', padding: '12px 14px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.04)', background: 'rgba(255,255,255,0.02)', color: '#e5e7eb', outline: 'none', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.02)' }} />
+          </label>
+          <label style={{ display: 'block', marginBottom: '18px' }}>
+            <div style={{ fontSize: 13, color: '#9ca3af', marginBottom: 6 }}>Contraseña</div>
+            <input type="password" value={loginPass} onChange={(e)=>setLoginPass(e.target.value)} style={{ width: '100%', marginTop: '0', padding: '12px 14px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.04)', background: 'rgba(255,255,255,0.02)', color: '#e5e7eb', outline: 'none', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.02)' }} />
+          </label>
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', paddingRight: 20 }}>
+            <button
+              onClick={() => { setLoginUser(''); setLoginPass(''); }}
+              style={{ padding: '10px 14px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.04)', background: 'transparent', color: '#e5e7eb', cursor: 'pointer' }}
+            >
+              Limpiar
+            </button>
+            <button
+              className="btn-primary"
+              onClick={() => handleLogin(loginUser, loginPass)}
+              style={{ padding: '10px 16px', borderRadius: 10, border: 'none', background: '#fb923c', color: '#071019', fontWeight: 700, cursor: 'pointer', boxShadow: '0 8px 24px rgba(251,146,60,0.18)', transition: 'transform 0.12s ease' }}
+              onMouseOver={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 12px 30px rgba(251,146,60,0.22)'; }}
+              onMouseOut={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 8px 24px rgba(251,146,60,0.18)'; }}
+            >
+              Entrar
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="page">
       <div className="layout">
-        <header className="hero" style={{ textAlign: 'center', padding: '40px 20px' }}>
-          <h1>El Gordo supplier</h1>
-          <p>Control de {unidadLabel}, retiros y balance del grupo.</p>
+        <header className="hero" style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: '20px', padding: '32px 48px' }}>
+          <div style={{ flex: '1 1 auto', minWidth: 0 }}>
+            <h1 style={{ margin: 0 }}>El Gordo supplier</h1>
+            <p style={{ margin: '6px 0 0 0' }}>Control de {unidadLabel}, retiros y balance del grupo.</p>
+          </div>
+
+          <div style={{ position: 'absolute', right: 24, top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {currentUser ? (
+              <div style={{ position: 'relative' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', minWidth: 120 }}>
+                    <span style={{ fontSize: '12px', color: '#9ca3af' }}>Usuario</span>
+                    <strong style={{ fontSize: '13px', color: '#e5e7eb' }}>{currentUser.nombre || currentUser.username}</strong>
+                  </div>
+                  <button
+                    onClick={() => setMenuOpen((s) => !s)}
+                    aria-label="Abrir menú"
+                    style={{
+                      width: 42,
+                      height: 38,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderRadius: 10,
+                      border: '1px solid rgba(255,255,255,0.06)',
+                      background: '#06080b',
+                      color: '#e5e7eb',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <svg width="18" height="14" viewBox="0 0 18 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <rect y="1" width="18" height="2" rx="1" fill="currentColor" />
+                      <rect y="6" width="18" height="2" rx="1" fill="currentColor" />
+                      <rect y="11" width="18" height="2" rx="1" fill="currentColor" />
+                    </svg>
+                  </button>
+                </div>
+
+                {menuOpen && (
+                  <div onMouseLeave={() => setMenuOpen(false)} style={{ position: 'absolute', right: 12, top: 52, width: 240, background: 'linear-gradient(180deg,#071021 0%, #081127 100%)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: 10, padding: 10, boxShadow: '0 14px 48px rgba(2,6,23,0.85)', zIndex: 40 }}>
+                    <div style={{ padding: '10px 12px', borderBottom: '1px solid rgba(255,255,255,0.03)', marginBottom: 8 }}>
+                      <div style={{ fontSize: 12, color: '#9ca3af' }}>Sesión</div>
+                      <div style={{ fontWeight: 700, color: '#e5e7eb', marginTop: 4 }}>{currentUser.nombre || currentUser.username}</div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {currentUser.permissions?.manageUsers && (
+                        <button onClick={() => { setManageUsersOpen(true); setMenuOpen(false); }} style={{ textAlign: 'left', padding: '10px 12px', borderRadius: 8, background: 'transparent', border: 'none', color: '#e5e7eb', cursor: 'pointer', fontWeight: 600 }} onMouseOver={(e)=>{(e.currentTarget as HTMLButtonElement).style.background='rgba(255,255,255,0.02)'}} onMouseOut={(e)=>{(e.currentTarget as HTMLButtonElement).style.background='transparent'}}>Administrar usuarios</button>
+                      )}
+                      <button onClick={() => { setCurrentUser(null); localStorage.removeItem('currency-grupo-currentUser'); setMenuOpen(false); }} style={{ textAlign: 'left', padding: '10px 12px', borderRadius: 8, background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', fontWeight: 700 }} onMouseOver={(e)=>{(e.currentTarget as HTMLButtonElement).style.background='rgba(239,68,68,0.06)'}} onMouseOut={(e)=>{(e.currentTarget as HTMLButtonElement).style.background='transparent'}}>Cerrar sesión</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button onClick={() => setLoginOpen(true)} className="btn-primary">Iniciar sesión</button>
+            )}
+          </div>
         </header>
 
         <section className="top-controls" style={{ display: 'none' }}>
@@ -709,10 +990,10 @@ export default function HomePage() {
                   </strong>
                 </p>
               </div>
-              <div style={{ textAlign: 'right', minWidth: '200px' }}>
+                <div style={{ textAlign: 'right', minWidth: '200px' }}>
                 <button
                   onClick={handleGuardar}
-                  disabled={sincronizando}
+                  disabled={sincronizando || !(currentUser?.permissions?.sync)}
                   className="btn-primary"
                   style={{ marginBottom: '8px' }}
                 >
@@ -734,10 +1015,11 @@ export default function HomePage() {
             <div className="panel-header banco panel-header-flex">
               <h2>Banco</h2>
               <div style={{ display: 'flex', gap: '12px' }}>
-                <button
-                  type="button"
-                  className="btn-primary"
-                  onClick={abrirModalMiembros}
+                {currentUser?.permissions?.manageMembers ? (
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={abrirModalMiembros}
                   style={{
                     padding: '8px 16px',
                     fontSize: '14px',
@@ -753,13 +1035,17 @@ export default function HomePage() {
                     e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
                     e.currentTarget.style.transform = 'translateY(0)';
                   }}
-                >
-                  👥 Miembros
-                </button>
-                <button
-                  type="button"
-                  className="btn-primary"
-                  onClick={abrirModalRetiro}
+                  >
+                    👥 Miembros
+                  </button>
+                ) : (
+                  <button type="button" disabled style={{ padding: '8px 16px', borderRadius: '6px', opacity: 0.5 }}>Miembros</button>
+                )}
+                {currentUser?.permissions?.retirar ? (
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={abrirModalRetiro}
                   style={{
                     padding: '8px 16px',
                     fontSize: '14px',
@@ -775,9 +1061,12 @@ export default function HomePage() {
                     e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
                     e.currentTarget.style.transform = 'translateY(0)';
                   }}
-                >
-                  Retirar
-                </button>
+                  >
+                    Retirar
+                  </button>
+                ) : (
+                  <button type="button" disabled style={{ padding: '8px 16px', borderRadius: '6px', opacity: 0.5 }}>Retirar</button>
+                )}
               </div>
             </div>
             <div className="panel-body">
@@ -800,13 +1089,14 @@ export default function HomePage() {
                           <button
                             type="button"
                             onClick={() => abrirModalSumaResta(p, 'resta')}
+                            disabled={!currentUser?.permissions?.modifyBank}
                             style={{
                               padding: '4px 8px',
                               borderRadius: '4px',
                               border: '1px solid #ef4444',
-                              backgroundColor: '#ef4444',
+                              backgroundColor: currentUser?.permissions?.modifyBank ? '#ef4444' : '#6b7280',
                               color: 'white',
-                              cursor: 'pointer',
+                              cursor: currentUser?.permissions?.modifyBank ? 'pointer' : 'not-allowed',
                               fontSize: '14px',
                               fontWeight: '700',
                               transition: 'all 0.2s ease',
@@ -830,13 +1120,14 @@ export default function HomePage() {
                           <button
                             type="button"
                             onClick={() => abrirModalSumaResta(p, 'suma')}
+                            disabled={!currentUser?.permissions?.modifyBank}
                             style={{
                               padding: '4px 8px',
                               borderRadius: '4px',
                               border: '1px solid #22c55e',
-                              backgroundColor: '#22c55e',
+                              backgroundColor: currentUser?.permissions?.modifyBank ? '#22c55e' : '#6b7280',
                               color: 'white',
-                              cursor: 'pointer',
+                              cursor: currentUser?.permissions?.modifyBank ? 'pointer' : 'not-allowed',
                               fontSize: '14px',
                               fontWeight: '700',
                               transition: 'all 0.2s ease',
@@ -943,7 +1234,7 @@ export default function HomePage() {
           )}
           <button
             onClick={handleGuardar}
-            disabled={sincronizando}
+            disabled={sincronizando || !(currentUser?.permissions?.sync)}
             className="btn-primary"
             style={{
               padding: '10px 20px',
@@ -965,89 +1256,150 @@ export default function HomePage() {
           </button>
         </div>
 
-        {/* Historial */}
+        {/* Historial (pestañas) */}
         <section className="panel panel-history">
-          <div className="panel-header history">
-            <h2>Historial de retiros</h2>
-            {withdrawals.length > 0 && (
-              <button onClick={limpiarHistorial} className="btn-clear-history">
-                Limpiar historial
+          <div className="panel-header history" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={() => setHistorialTab('retiros')}
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: '8px',
+                  border: historialTab === 'retiros' ? '1px solid #374151' : '1px solid transparent',
+                  backgroundColor: historialTab === 'retiros' ? '#0b1220' : 'transparent',
+                  color: '#e5e7eb',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                }}
+              >
+                Retiros
               </button>
-            )}
+              <button
+                type="button"
+                onClick={() => setHistorialTab('banco')}
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: '8px',
+                  border: historialTab === 'banco' ? '1px solid #374151' : '1px solid transparent',
+                  backgroundColor: historialTab === 'banco' ? '#0b1220' : 'transparent',
+                  color: '#e5e7eb',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                }}
+              >
+                Banco
+              </button>
+            </div>
+            <div>
+              {historialTab === 'retiros' && withdrawals.length > 0 && (
+                <button onClick={limpiarHistorial} className="btn-clear-history">Limpiar historial</button>
+              )}
+              {historialTab === 'banco' && bankHistory.length > 0 && (
+                <button onClick={limpiarHistorialBanco} className="btn-clear-history">Limpiar historial banco</button>
+              )}
+            </div>
           </div>
           <div className="panel-body">
-            {withdrawals.length === 0 ? (
-              <p className="caption">Todavía no hay retiros.</p>
-            ) : (
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Fecha</th>
-                    <th>Nombre</th>
-                    <th>{unidadLabel}</th>
-                    <th>Tasa</th>
-                    <th>Monto ({simboloUsd})</th>
-                    <th>Estado</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {withdrawals.map((w) => (
-                    <tr key={w.id}>
-                      <td>{formatearFecha(w.fecha)}</td>
-                      <td>{w.nombre}</td>
-                      <td>{w.oro}</td>
-                      <td>{formatearNumero(w.tasa, 3)}</td>
-                      <td>{formatearNumero(w.usd)}</td>
-                      <td>
-                        <select
-                          value={w.estado === 'pagado' ? 'Pagado' : 'Pendiente'}
-                          onChange={(e) =>
-                            cambiarEstadoHistorial(
-                              w.id,
-                              e.target.value === 'Pagado'
-                                ? 'pagado'
-                                : 'pendiente'
-                            )
-                          }
-                        >
-                          <option value="Pagado">Pagado</option>
-                          <option value="Pendiente">Pendiente</option>
-                        </select>
-                      </td>
-                      <td style={{ textAlign: 'center' }}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (window.confirm('¿Estás seguro de que deseas eliminar este retiro?')) {
-                              setWithdrawals(withdrawals.filter((item) => item.id !== w.id));
-                            }
-                          }}
-                          style={{
-                            padding: '4px 8px',
-                            borderRadius: '4px',
-                            border: 'none',
-                            backgroundColor: '#ef4444',
-                            color: 'white',
-                            cursor: 'pointer',
-                            fontSize: '12px',
-                            fontWeight: '600',
-                            transition: 'all 0.2s ease',
-                          }}
-                          onMouseOver={(e) => {
-                            e.currentTarget.style.backgroundColor = '#dc2626';
-                          }}
-                          onMouseOut={(e) => {
-                            e.currentTarget.style.backgroundColor = '#ef4444';
-                          }}
-                        >
-                          ✕
-                        </button>
-                      </td>
+            {historialTab === 'retiros' ? (
+              (withdrawals.length === 0 ? (
+                <p className="caption">Todavía no hay retiros.</p>
+              ) : (
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Fecha</th>
+                      <th>Nombre</th>
+                      <th>Usuario</th>
+                      <th>{unidadLabel}</th>
+                      <th>Tasa</th>
+                      <th>Monto ({simboloUsd})</th>
+                      <th>Estado</th>
+                      <th></th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {withdrawals.map((w) => (
+                      <tr key={w.id}>
+                        <td>{formatearFecha(w.fecha)}</td>
+                        <td>{w.nombre}</td>
+                        <td style={{ fontSize: 12, color: '#9ca3af' }}>{w.actor || '-'}</td>
+                        <td>{w.oro}</td>
+                        <td>{formatearNumero(w.tasa, 3)}</td>
+                        <td>{formatearNumero(w.usd)}</td>
+                        <td>
+                          <select
+                            value={w.estado === 'pagado' ? 'Pagado' : 'Pendiente'}
+                            onChange={(e) =>
+                              cambiarEstadoHistorial(
+                                w.id,
+                                e.target.value === 'Pagado' ? 'pagado' : 'pendiente'
+                              )
+                            }
+                          >
+                            <option value="Pagado">Pagado</option>
+                            <option value="Pendiente">Pendiente</option>
+                          </select>
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm('¿Estás seguro de que deseas eliminar este retiro?')) {
+                                setWithdrawals(withdrawals.filter((item) => item.id !== w.id));
+                              }
+                            }}
+                            style={{
+                              padding: '4px 8px',
+                              borderRadius: '4px',
+                              border: 'none',
+                              backgroundColor: '#ef4444',
+                              color: 'white',
+                              cursor: 'pointer',
+                              fontSize: '12px',
+                              fontWeight: '600',
+                              transition: 'all 0.2s ease',
+                            }}
+                            onMouseOver={(e) => { e.currentTarget.style.backgroundColor = '#dc2626'; }}
+                            onMouseOut={(e) => { e.currentTarget.style.backgroundColor = '#ef4444'; }}
+                          >
+                            ✕
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ))
+            ) : (
+              (bankHistory.length === 0 ? (
+                <p className="caption">No hay operaciones en el banco aún.</p>
+              ) : (
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Fecha</th>
+                      <th>Nombre</th>
+                      <th>Usuario</th>
+                      <th>Tipo</th>
+                      <th>Cambio ({unidadLabel})</th>
+                      <th>Balance</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bankHistory.map((h) => (
+                      <tr key={h.id}>
+                        <td>{formatearFecha(h.fecha)}</td>
+                        <td>{h.nombre}</td>
+                        <td style={{ fontSize: 12, color: '#9ca3af' }}>{h.actor || '-'}</td>
+                        <td style={{ textTransform: 'capitalize' }}>{h.tipo}</td>
+                        <td style={{ color: h.delta < 0 ? '#ef4444' : '#22c55e' }}>{h.delta}</td>
+                        <td>{h.balance}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ))
             )}
           </div>
         </section>
@@ -1484,6 +1836,86 @@ export default function HomePage() {
                 >
                   {tipoOperacion === 'suma' ? 'Agregar' : 'Restar'}
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Login */}
+        {loginOpen && (
+          <div className="modal-backdrop" onClick={() => setLoginOpen(false)}>
+            <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '360px' }}>
+              <h3>Iniciar sesión</h3>
+              <label>Usuario</label>
+              <input type="text" value={loginUser} onChange={(e) => setLoginUser(e.target.value)} />
+              <label>Contraseña</label>
+              <input type="password" value={loginPass} onChange={(e) => setLoginPass(e.target.value)} />
+              <div className="modal-actions">
+                <button onClick={() => setLoginOpen(false)}>Cancelar</button>
+                <button className="btn-primary" onClick={() => handleLogin(loginUser, loginPass)}>Entrar</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Administrar usuarios (solo para admins) */}
+        {manageUsersOpen && currentUser?.permissions?.manageUsers && (
+          <div className="modal-backdrop" onClick={() => setManageUsersOpen(false)}>
+            <div className="modal modal-large" onClick={(e) => e.stopPropagation()}>
+              <h3>Administrar Usuarios</h3>
+
+              <div style={{ display: 'flex', gap: '16px' }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', marginBottom: '8px' }}>Usuarios</label>
+                  <div style={{ display: 'grid', gap: '8px' }}>
+                    {users.map((u) => (
+                      <div key={u.username} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px', border: '1px solid #374151', borderRadius: '6px' }}>
+                        <div>
+                          <div style={{ fontWeight: 700 }}>{u.nombre || u.username}</div>
+                          <div style={{ fontSize: '12px', color: '#9ca3af' }}>{u.username}</div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button onClick={() => setEditingUser(u)} className="btn-primary">Editar</button>
+                          <button onClick={() => handleDeleteUser(u.username)} style={{ backgroundColor: '#ef4444', color: '#fff', border: 'none', padding: '6px 10px', borderRadius: '6px' }}>Eliminar</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ width: '420px' }}>
+                  <label style={{ display: 'block', marginBottom: '8px' }}>{editingUser ? 'Editar Usuario' : 'Crear Nuevo Usuario'}</label>
+                  <div style={{ display: 'grid', gap: '8px' }}>
+                    <input placeholder="Usuario (id)" value={editingUser?.username || ''} onChange={(e) => setEditingUser((prev) => ({ ...(prev || { username: '', password: '', permissions: {} }), username: e.target.value }))} disabled={!!editingUser?.username} />
+                    <input placeholder="Nombre" value={editingUser?.nombre || ''} onChange={(e) => setEditingUser((prev) => ({ ...(prev || { username: '', password: '', permissions: {} }), nombre: e.target.value }))} />
+                    <input placeholder="Contraseña" value={editingUser?.password || ''} onChange={(e) => setEditingUser((prev) => ({ ...(prev || { username: '', password: '', permissions: {} }), password: e.target.value }))} />
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                      <label><input type="checkbox" checked={!!editingUser?.permissions.manageUsers} onChange={(e) => setEditingUser((prev) => ({ ...(prev || { username: '', password: '', permissions: {} }), permissions: { ...(prev?.permissions || {}), manageUsers: e.target.checked } }))} /> Administrar usuarios</label>
+                      <label><input type="checkbox" checked={!!editingUser?.permissions.manageMembers} onChange={(e) => setEditingUser((prev) => ({ ...(prev || { username: '', password: '', permissions: {} }), permissions: { ...(prev?.permissions || {}), manageMembers: e.target.checked } }))} /> Gestionar miembros</label>
+                      <label><input type="checkbox" checked={!!editingUser?.permissions.modifyBank} onChange={(e) => setEditingUser((prev) => ({ ...(prev || { username: '', password: '', permissions: {} }), permissions: { ...(prev?.permissions || {}), modifyBank: e.target.checked } }))} /> Modificar banco</label>
+                      <label><input type="checkbox" checked={!!editingUser?.permissions.retirar} onChange={(e) => setEditingUser((prev) => ({ ...(prev || { username: '', password: '', permissions: {} }), permissions: { ...(prev?.permissions || {}), retirar: e.target.checked } }))} /> Retirar</label>
+                      <label><input type="checkbox" checked={!!editingUser?.permissions.sync} onChange={(e) => setEditingUser((prev) => ({ ...(prev || { username: '', password: '', permissions: {} }), permissions: { ...(prev?.permissions || {}), sync: e.target.checked } }))} /> Sincronizar</label>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button onClick={() => { setEditingUser({ username: '', password: '', nombre: '', permissions: {} }); }} className="btn-primary">Nuevo</button>
+                      <button onClick={() => {
+                        if (!editingUser) return;
+                        if (!editingUser.username || !editingUser.password) { alert('Usuario y contraseña requeridos'); return; }
+                        if (users.some((u) => u.username === editingUser.username)) {
+                          handleSaveUser(editingUser);
+                        } else {
+                          handleCreateUser(editingUser);
+                        }
+                        setEditingUser(null);
+                      }} className="btn-primary">Guardar</button>
+                      <button onClick={() => setEditingUser(null)}>Cancelar</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="modal-actions">
+                <button onClick={() => setManageUsersOpen(false)}>Cerrar</button>
               </div>
             </div>
           </div>
