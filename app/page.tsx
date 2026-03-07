@@ -1662,29 +1662,31 @@ export default function HomePage() {
                           >
                             ✎ Editar
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => eliminarMiembro(member.id)}
-                            style={{
-                              padding: '6px 10px',
-                              borderRadius: '4px',
-                              border: 'none',
-                              backgroundColor: '#ef4444',
-                              color: 'white',
-                              cursor: 'pointer',
-                              fontSize: '12px',
-                              fontWeight: '600',
-                              transition: 'all 0.2s ease',
-                            }}
-                            onMouseOver={(e) => {
-                              e.currentTarget.style.backgroundColor = '#dc2626';
-                            }}
-                            onMouseOut={(e) => {
-                              e.currentTarget.style.backgroundColor = '#ef4444';
-                            }}
-                          >
-                            ✕ Eliminar
-                          </button>
+                          {currentUser?.permissions?.manageMembers && (
+                            <button
+                              type="button"
+                              onClick={() => eliminarMiembro(member.id)}
+                              style={{
+                                padding: '6px 10px',
+                                borderRadius: '4px',
+                                border: 'none',
+                                backgroundColor: '#ef4444',
+                                color: 'white',
+                                cursor: 'pointer',
+                                fontSize: '12px',
+                                fontWeight: '600',
+                                transition: 'all 0.2s ease',
+                              }}
+                              onMouseOver={(e) => {
+                                e.currentTarget.style.backgroundColor = '#dc2626';
+                              }}
+                              onMouseOut={(e) => {
+                                e.currentTarget.style.backgroundColor = '#ef4444';
+                              }}
+                            >
+                              ✕ Eliminar
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
