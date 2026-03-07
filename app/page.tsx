@@ -1416,6 +1416,7 @@ export default function HomePage() {
                       <th>Tipo</th>
                       <th>Cambio ({unidadLabel})</th>
                       <th>Balance</th>
+                      {currentUser?.permissions?.manageUsers && <th></th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -1427,6 +1428,33 @@ export default function HomePage() {
                         <td style={{ textTransform: 'capitalize' }}>{h.tipo}</td>
                         <td style={{ color: h.delta < 0 ? '#ef4444' : '#22c55e' }}>{h.delta}</td>
                         <td>{h.balance}</td>
+                        {currentUser?.permissions?.manageUsers && (
+                          <td style={{ textAlign: 'center' }}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (window.confirm('¿Estás seguro de que deseas eliminar esta operación del banco?')) {
+                                  setBankHistory(bankHistory.filter((item) => item.id !== h.id));
+                                }
+                              }}
+                              style={{
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                border: 'none',
+                                backgroundColor: '#ef4444',
+                                color: 'white',
+                                cursor: 'pointer',
+                                fontSize: '12px',
+                                fontWeight: '600',
+                                transition: 'all 0.2s ease',
+                              }}
+                              onMouseOver={(e) => { e.currentTarget.style.backgroundColor = '#dc2626'; }}
+                              onMouseOut={(e) => { e.currentTarget.style.backgroundColor = '#ef4444'; }}
+                            >
+                              ✕
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
