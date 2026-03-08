@@ -205,8 +205,16 @@ export default function HomePage() {
   // cargar datos una sola vez al montar el componente
   useEffect(() => {
     if (!yaCargoDelSheet) {
-      loadFromSheet();
-      setYaCargoDelSheet(true);
+      // si ya hay datos locales guardados, no cargamos desde la hoja para evitar
+      // sobrescribir cambios locales no sincronizados. El usuario puede usar
+      // el botón "Guardar cambios" para sincronizar a Sheets.
+      const guardado = localStorage.getItem('currency-grupo-data');
+      if (guardado) {
+        setYaCargoDelSheet(true);
+      } else {
+        loadFromSheet();
+        setYaCargoDelSheet(true);
+      }
     }
   }, [yaCargoDelSheet]);
 
