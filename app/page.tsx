@@ -68,6 +68,7 @@ export default function HomePage() {
   const [simboloUsd, setSimboloUsd] = useState<string>('USD');
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [sincronizando, setSincronizando] = useState(false);
+  const [cargandoSheet, setCargandoSheet] = useState(false);
   const [ultimaSincronizacion, setUltimaSincronizacion] = useState<string | null>(null);
   const [bankHistory, setBankHistory] = useState<BankHistoryEntry[]>([]);
   const [historialTab, setHistorialTab] = useState<'retiros' | 'banco'>('retiros');
@@ -1286,7 +1287,7 @@ export default function HomePage() {
             <button
               onClick={async () => {
                 try {
-                  setSincronizando(true);
+                  setCargandoSheet(true);
                   await loadFromSheet();
                   setYaCargoDelSheet(true);
                   alert('✅ Datos recargados desde Google Sheets');
@@ -1294,11 +1295,12 @@ export default function HomePage() {
                   console.error('Error recargando datos', e);
                   alert('❌ Error al recargar desde Sheets');
                 } finally {
-                  setSincronizando(false);
+                  setCargandoSheet(false);
                 }
               }}
               type="button"
               className="btn-secondary"
+              disabled={cargandoSheet}
               style={{
                 padding: '10px 16px',
                 fontSize: '14px',
@@ -1307,10 +1309,10 @@ export default function HomePage() {
                 border: '1px solid rgba(255,255,255,0.06)',
                 background: 'transparent',
                 color: '#e5e7eb',
-                cursor: 'pointer',
+                cursor: cargandoSheet ? 'not-allowed' : 'pointer',
               }}
             >
-              🔄 Refrescar desde Sheets
+              {cargandoSheet ? '🔄 Cargando...' : '🔄 Refrescar desde Sheets'}
             </button>
           </div>
 
