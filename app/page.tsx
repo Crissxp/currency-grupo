@@ -1278,12 +1278,15 @@ export default function HomePage() {
 
         {/* Botón Guardar Cambios */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 0', gap: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 160 }}>
             {ultimaSincronizacion && (
               <div style={{ display: 'flex', alignItems: 'center', fontSize: '12px', color: '#9ca3af' }}>
                 Última: {ultimaSincronizacion}
               </div>
             )}
+          </div>
+
+          <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
             <button
               onClick={async () => {
                 try {
@@ -1316,7 +1319,7 @@ export default function HomePage() {
             </button>
           </div>
 
-          <div>
+          <div style={{ minWidth: 180, textAlign: 'right' }}>
             <button
               onClick={handleGuardar}
               disabled={sincronizando || !(currentUser?.permissions?.sync)}
