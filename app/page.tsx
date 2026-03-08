@@ -1277,35 +1277,12 @@ export default function HomePage() {
 
         {/* Botón Guardar Cambios */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 0', gap: '12px' }}>
-          {ultimaSincronizacion && (
-            <div style={{ display: 'flex', alignItems: 'center', fontSize: '12px', color: '#9ca3af' }}>
-              Última: {ultimaSincronizacion}
-            </div>
-          )}
-          <div style={{ display: 'flex', gap: 12 }}>
-            <button
-              onClick={handleGuardar}
-              disabled={sincronizando || !(currentUser?.permissions?.sync)}
-              className="btn-primary"
-              style={{
-                padding: '10px 20px',
-                fontSize: '14px',
-                fontWeight: '600',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-                transition: 'all 0.2s ease',
-              }}
-              onMouseOver={(e) => {
-                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.4)';
-                e.currentTarget.style.transform = 'translateY(-2px)';
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
-                e.currentTarget.style.transform = 'translateY(0)';
-              }}
-            >
-              {sincronizando ? '⏳ Guardando...' : '💾 Guardar cambios'}
-            </button>
-
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {ultimaSincronizacion && (
+              <div style={{ display: 'flex', alignItems: 'center', fontSize: '12px', color: '#9ca3af' }}>
+                Última: {ultimaSincronizacion}
+              </div>
+            )}
             <button
               onClick={async () => {
                 try {
@@ -1334,6 +1311,31 @@ export default function HomePage() {
               }}
             >
               🔄 Refrescar desde Sheets
+            </button>
+          </div>
+
+          <div>
+            <button
+              onClick={handleGuardar}
+              disabled={sincronizando || !(currentUser?.permissions?.sync)}
+              className="btn-primary"
+              style={{
+                padding: '10px 20px',
+                fontSize: '14px',
+                fontWeight: '600',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.4)';
+                e.currentTarget.style.transform = 'translateY(-2px)';
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+                e.currentTarget.style.transform = 'translateY(0)';
+              }}
+            >
+              {sincronizando ? '⏳ Guardando...' : '💾 Guardar cambios'}
             </button>
           </div>
         </div>
