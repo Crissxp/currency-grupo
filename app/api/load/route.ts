@@ -2,6 +2,7 @@ import { getAllWithdrawals } from '@/lib/googleSheets';
 import { NextResponse } from 'next/server';
 
 export async function GET() {
+  // Ensure runtime is server-only and does not rely on client-only APIs
   try {
     const rows = await getAllWithdrawals();
 
