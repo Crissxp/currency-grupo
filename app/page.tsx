@@ -134,6 +134,19 @@ export default function HomePage() {
     }
   }, [users]);
 
+  // helper para obtener el username actual también desde localStorage (evita condiciones de carrera)
+  const getCurrentUsername = () => {
+    try {
+      if (currentUser && currentUser.username) return currentUser.username;
+      const s = localStorage.getItem('currency-grupo-currentUser');
+      if (!s) return undefined;
+      const parsed = JSON.parse(s);
+      return parsed && parsed.username ? parsed.username : undefined;
+    } catch (e) {
+      return undefined;
+    }
+  };
+
   // Modal de miembros
   const [modalMiembrosAbierto, setModalMiembrosAbierto] = useState(false);
   const [miembroEnEdicion, setMiembroEnEdicion] = useState<Player | null>(null);
@@ -566,7 +579,7 @@ export default function HomePage() {
           tipo: 'ajuste',
           fecha: new Date().toISOString(),
           balance: limpio,
-          actor: currentUser?.username || undefined,
+          actor: getCurrentUsername(),
         };
         setBankHistory((prev) => [entry, ...prev]);
       }
@@ -610,7 +623,7 @@ export default function HomePage() {
           tipo: tipoOperacion === 'suma' ? 'suma' : 'resta',
           fecha: new Date().toISOString(),
           balance: nuevoValor,
-          actor: currentUser?.username || undefined,
+          actor: getCurrentUsername(),
         };
         setBankHistory((prev) => [entry, ...prev]);
       }
@@ -694,7 +707,7 @@ export default function HomePage() {
         usd,
         fecha: ahora,
         estado: 'pendiente',
-        actor: currentUser?.username || undefined,
+        actor: getCurrentUsername(),
       });
       // registrar en historial del banco la resta por retiro
       const histEntry: BankHistoryEntry = {
@@ -705,7 +718,7 @@ export default function HomePage() {
         tipo: 'retiro',
         fecha: ahora,
         balance: nuevoOroBanco[p.id],
-        actor: currentUser?.username || undefined,
+        actor: getCurrentUsername(),
       };
       setBankHistory((prev) => [histEntry, ...prev]);
     }
